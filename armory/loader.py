@@ -29,6 +29,6 @@ async def update_manifest(destiny):
 async def initialize_destiny():
     destiny = pydest.Pydest(BUNGIE_KEY)
 
-    destiny.update_manifest()
+    await destiny.update_manifest()
 
     return destiny
