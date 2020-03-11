@@ -2,6 +2,7 @@ import logging
 import discord
 from discord.ext import commands
 import os
+import asyncio
 import constants
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s', 
@@ -17,6 +18,7 @@ if not (DISCORD_KEY := os.environ.get("DISCORD_KEY")):
     raise ValueError("Please set the environment variable for DISCORD_KEY")
 
 logger.info("Starting up bot")
+current_manifest = None
 
 bot = commands.Bot(command_prefix="!", description='Retrieve rolls for Destiny 2 weapons')
 
