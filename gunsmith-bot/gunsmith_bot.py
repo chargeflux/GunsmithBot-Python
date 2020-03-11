@@ -1,5 +1,5 @@
 import logging
-import discord
+from discord.ext import commands
 import os
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s', 
@@ -14,21 +14,20 @@ if not (DISCORD_KEY := os.environ.get("DISCORD_KEY")):
     logger.error("Failed to retrieve DISCORD_KEY")
     raise ValueError("Please set the environment variable for DISCORD_KEY")
 
-logger.info("Starting up bot client")
+logger.info("Starting up bot")
 
-client = discord.Client()
+bot = commands.Bot(command_prefix="!", description='Retrieve rolls for Destiny 2 weapons')
 
-@client.event
+@bot.event
 async def on_ready():
-    logger.log(logging.INFO, f'We have logged in as {client.user}')
+    logger.log(logging.INFO, f'We have logged in as {bot.user}')
 
-@client.event
-async def on_message(message):
-    if message.author == client.user:
+@bot.command()
+async def gunsmith(ctx, *args):
+    if not args:
         return
+    
+    weapon = ' '.join(args)
+    await ctx.send(weapon)
 
-    if message.content.startswith('!gunsmith'):
-        logger.log(logging.DEBUG, message.content)
-        await message.channel.send('Hello!')
-
-client.run(DISCORD_KEY)
+bot.run(DISCORD_KEY)
