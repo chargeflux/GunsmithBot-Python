@@ -1,6 +1,8 @@
 import logging
+import discord
 from discord.ext import commands
 import os
+import constants
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s', 
                     datefmt='%Y-%m-%d %I:%M:%S %p')
@@ -28,6 +30,12 @@ async def gunsmith(ctx, *args):
         return
     
     weapon = ' '.join(args)
-    await ctx.send(weapon)
+
+    embed = discord.Embed(title=weapon, color=constants.DISCORD_BG_HEX)
+    embed.add_field(name="Barrel", value="", inline=True)
+    embed.add_field(name="Magazine", value="", inline=True)
+    embed.add_field(name="Perk 1", value="", inline=True)
+    embed.add_field(name="Perk 2", value="", inline=True)
+    await ctx.send(embed=embed)
 
 bot.run(DISCORD_KEY)
