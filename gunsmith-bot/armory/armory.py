@@ -3,8 +3,7 @@ import os
 import glob
 import json
 from dataclasses import dataclass
-import loader
-import constants
+from . import constants
 
 class Armory:
     def __init__(self, current_manifest):
