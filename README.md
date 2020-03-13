@@ -18,6 +18,13 @@ Pull requests are welcome. For major changes, please open an issue first to disc
 
 Please make sure to update tests as appropriate.
 
+## Resources/Attributions
+
+[Destiny 2 API Info - vpzed](https://github.com/vpzed/Destiny2-API-Info/wiki/)
+- An excellent guide to understanding Bungie's API and navigating the manifest SQLite database
+  
+[Bungie.net API](https://github.com/Bungie-net/api/wiki/)
+
 ## License
 
 [MIT](./LICENSE)

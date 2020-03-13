@@ -6,6 +6,7 @@ class SocketCategoryHash:
     INTRINSICS: int = 3956125808
     WEAPON_PERKS: int = 4241085061
 
+@dataclass
 class SocketTypeHash:
     # Query DestinySocketCategoryDefinition with socketCategoryHash
     INTRINSICS: int = 3956125808
