@@ -3,20 +3,17 @@ import pydest
 import os
 import asyncio
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s', 
-                    datefmt='%Y-%m-%d %I:%M:%S %p')
-
 logger = logging.getLogger('Loader')
-logger.setLevel(logging.INFO)
 
 if not (BUNGIE_KEY := os.environ.get("BUNGIE_KEY")):
     logger.error("Failed to retrieve BUNGIE_KEY")
     raise ValueError("Please set the environment variable for BUNGIE_KEY")
 
-
-
 async def get_manifest(destiny):
-    return destiny._manifest.manifest_files['en']
+    if destiny._manifest.manifest_files['en']:
+        return destiny._manifest.manifest_files['en']
+    else:
+        raise AttributeError
 
 async def update_manifest(destiny):
     try:
@@ -31,4 +28,14 @@ async def initialize_destiny():
 
     await destiny.update_manifest()
 
+    logger.info("Initialized PyDest")
+
     return destiny
+
+def setupLogger():
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s', 
+                        datefmt='%Y-%m-%d %I:%M:%S %p')
+    logger.setLevel(logging.INFO)
+
+if __name__ == "__main__":
+    setupLogger()
