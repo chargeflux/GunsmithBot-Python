@@ -2,8 +2,11 @@ import sqlite3
 import os
 import glob
 import json
+import logging
 from dataclasses import dataclass
 from . import constants
+
+logger = logging.getLogger('Armory')
 
 class Armory:
     def __init__(self, current_manifest):
@@ -18,7 +21,8 @@ class Armory:
             cursor.execute('''
             SELECT item.id, key, value FROM DestinyInventoryItemDefinition as item, json_each(item.json, '$')
             where json_extract(item.json, '$.displayProperties.name') LIKE ? and 
-            (key) in ("displayProperties", "sockets", "displaySource")''', (name + "%",))
+            json_extract(item.json, '$.sockets') is not null and
+            (key) in ("displayProperties", "sockets", "itemCategoryHashes", "displaySource")''', (name + "%",))
             
             weapons = {}
             for row in cursor:
@@ -45,16 +49,12 @@ class Weapon:
     def __init__(self, id, weapon_data_raw, current_manifest):
         self.db_id = id
         self._current_manifest_path = current_manifest
-
+        self.weapon_base_info = WeaponBaseArchetype()
         self.name = None
         self.description = None
         self.icon = None
-
         self.intrinsic = None
-        self.barrels = None
-        self.magazines = None
-        self.perks_1 = None
-        self.perks_2 = None
+        self.WeaponPerks = []
 
         self.__extract_data__(weapon_data_raw)
     
@@ -75,7 +75,7 @@ class Weapon:
                 if key == "sockets":
                     socket_data = json.loads(value)
                     for category_data in socket_data["socketCategories"]:
-                        if category_data["socketCategoryHash"] == constants.SocketCategoryHash().INTRINSICS: # TODO
+                        if category_data["socketCategoryHash"] == constants.SocketCategoryHash().INTRINSICS:
                             for index in category_data['socketIndexes']:
                                 socket = socket_data["socketEntries"][index]
 
@@ -105,12 +105,12 @@ class Weapon:
                                         
                                         plug_info = json.loads(plug_cursor.fetchone()[0])
 
-                                        plugs.append(WeaponPerkDetails(name = plug_info['name'], 
-                                                         description = plug_info['description'],
-                                                         icon = plug_info['icon']))
+                                        plugs.append(WeaponPerkPlugInfo(name = plug_info['name'], 
+                                                                        description = plug_info['description'],
+                                                                        icon = plug_info['icon']))
                             self.intrinsic = plugs
                         if category_data["socketCategoryHash"] == constants.SocketCategoryHash().WEAPON_PERKS:
-                            for index in category_data['socketIndexes']:
+                            for order_idx, index in enumerate(category_data['socketIndexes']):
                                 socket = socket_data["socketEntries"][index]
                                 socket_type_hash = socket['socketTypeHash']
                                 converted_socket_type_hash = self.convert_hash(socket_type_hash)
@@ -121,11 +121,14 @@ class Weapon:
                                 SELECT json_extract(item.json, "$.plugWhitelist[0]") 
                                 FROM DestinySocketTypeDefinition as item 
                                 WHERE item.id = ?''', (converted_socket_type_hash,))
+                            
+                                plug_category_info = json.loads(cursor.fetchone()[0])
 
-                                socket_type_info = json.loads(cursor.fetchone()[0])
+                                if not constants.PlugCategoryHash.is_valid(plug_category_info["categoryIdentifier"].title()):
+                                    continue
 
                                 plugs = []
-                                if 'randomizedPlugSetHash' in socket: # TODO Handle static rolls: reusablePlugSetHash
+                                if 'randomizedPlugSetHash' in socket:
                                     randomizedPlugSetHash = socket['randomizedPlugSetHash']
                                     
                                     converted_randomizedPlugSetHash = self.convert_hash(randomizedPlugSetHash)
@@ -151,9 +154,9 @@ class Weapon:
                                         
                                         plug_info = json.loads(plug_cursor.fetchone()[0])
 
-                                        plugs.append(WeaponPerkDetails(name = plug_info['name'], 
-                                                         description = plug_info['description'],
-                                                         icon = plug_info['icon']))
+                                        plugs.append(WeaponPerkPlugInfo(name = plug_info['name'], 
+                                                                        description = plug_info['description'],
+                                                                        icon = plug_info['icon']))
 
                                 elif 'reusablePlugSetHash' in socket:
                                     reusablePlugSetHash = socket['reusablePlugSetHash']
@@ -180,27 +183,76 @@ class Weapon:
                                         
                                         plug_info = json.loads(plug_cursor.fetchone()[0])
 
-                                        plugs.append(WeaponPerkDetails(name = plug_info['name'], 
-                                                         description = plug_info['description'],
-                                                         icon = plug_info['icon']))
+                                        plugs.append(WeaponPerkPlugInfo(name = plug_info['name'], 
+                                                                        description = plug_info['description'],
+                                                                        icon = plug_info['icon']))
 
-                                if socket_type_info["categoryHash"] == constants.SocketTypeHash().BARRELS:
-                                    self.barrels = plugs
-                                if socket_type_info["categoryHash"] == constants.SocketTypeHash().MAGAZINES:
-                                    self.magazines = plugs
-                                if socket_type_info["categoryHash"] == constants.SocketTypeHash().FRAMES:
-                                    if not self.perks_1:
-                                        self.perks_1 = plugs
-                                    else:
-                                        self.perks_2 = plugs
+                                self.ProcessWeaponPerk(order_idx, plug_category_info["categoryHash"], plugs)
+                                
                 if key == "displayProperties":
                     display_data = json.loads(value)
                     self.name = display_data["name"]
                     self.description = display_data["description"]
                     self.icon = display_data["icon"]
 
-@dataclass(eq = True)
-class WeaponPerkDetails:
+                if key == "itemCategoryHashes":
+                    item_categories_hashes = sorted(json.loads(value))
+                    if item_categories_hashes.pop(0) != constants.WeaponBase.WEAPON.value:
+                        logger.error("Item is not a weapon")
+                        raise ValueError("Item is not a weapon")
+                    
+                    # Take only the first 2 hashes after weapon
+                    for item_category_hash in item_categories_hashes[0:2]:
+                        try:
+                            category = constants.WeaponBase(item_category_hash)
+                        except ValueError as e:
+                            logger.error("Failed to match weapon category")
+                            raise e
+                        self.weapon_base_info.set_field(category)
+
+    def ProcessWeaponPerk(self, order_idx, plug_category_hash, plugs): 
+        plug_category = constants.PlugCategoryHash(plug_category_hash)
+        self.WeaponPerks.append(WeaponPerk(idx = order_idx, 
+                                           name = plug_category.name, 
+                                           plugs = plugs))
+
+@dataclass()
+class WeaponPerkPlugInfo:
     name: str
     description: str
     icon: str
+
+    def __str__(self):
+        return self.name
+
+@dataclass()
+class WeaponPerk:
+    idx: int
+    name: str
+    plugs: [WeaponPerkPlugInfo]
+
+    def __str__(self):
+        return '\n'.join(map(str,self.plugs))
+
+@dataclass
+class WeaponBaseArchetype:
+    weapon_class: constants.WeaponBase = None
+    weapon_type: constants.WeaponBase = None
+
+    def set_field(self, input):
+        if input.value < 5:
+            self.weapon_class = input
+        else:
+            self.weapon_type = input
+
+    def __str__(self):
+        return '**' + self.weapon_class.name.title() + ' ' + self.weapon_type.name.replace('_',' ').title() + '**'
+
+
+def setupLogger():
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s', 
+                        datefmt='%Y-%m-%d %I:%M:%S %p')
+    logger.setLevel(logging.INFO)
+
+if __name__ == "__main__":
+    setupLogger()
