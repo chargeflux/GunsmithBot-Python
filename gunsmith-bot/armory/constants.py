@@ -1,35 +1,34 @@
-from dataclasses import dataclass
 from enum import Enum
 
-@dataclass
-class SocketCategoryHash:
-    # Query DestinySocketCategoryDefinition with socketCategoryHash
-    INTRINSICS: int = 3956125808
-    WEAPON_PERKS: int = 4241085061
+class SocketCategoryHash(Enum):
+    INTRINSICS = 3956125808
+    WEAPON_PERKS = 4241085061
 
 class PlugCategoryHash(Enum):
-    Intrinsics = 3956125808
-    Stocks = 577918720
-    Perks = 7906839
-    Frames = 7906839
-    Barrels = 2833605196
-    Bowstrings = 3809303875
-    Magazines = 1806783418
-    Projectiles = 2718120384
-    Magazines_Gl = 2718120384
-    Blades = 1041766312
-    Grips = 3962145884
-    Batteries = 1757026848
-    Guards = 683359327
-    Scopes = 2619833294
-    Arrows = 1257608559
-    Launchers = 1202604782
-    Tubes = 1202604782
+    INTRINSICS = 3956125808
+    STOCKS = 577918720
+    PERKS = 7906839
+    FRAMES = 7906839
+    BARRELS = 2833605196
+    BOWSTRINGS = 3809303875
+    MAGAZINES = 1806783418
+    PROJECTILES = 2718120384
+    MAGAZINES_GL = 2718120384
+    BLADES = 1041766312
+    GRIPS = 3962145884
+    BATTERIES = 1757026848
+    GUARDS = 683359327
+    SCOPES = 2619833294
+    ARROWS = 1257608559
+    LAUNCHERS = 1202604782
+    TUBES = 1202604782
 
     @classmethod
-    def is_valid(self, category_name):
-        return category_name in self.__members__
+    def is_valid(cls, category_name):
+        return category_name in cls.__members__
 
+    def __str__(self):
+        return self.title()
 
 class WeaponBase(Enum):
     WEAPON = 1
@@ -47,9 +46,9 @@ class WeaponBase(Enum):
     ROCKET_LAUNCHER = 13
     SIDEARM = 14
     SWORD = 54
-    GRENADE_LAUNCHERS = 153950757
-    LINEAR_FUSION_RIFLES = 1504945536
-    TRACE_RIFLES = 2489664120
-    BOWS = 3317538576
-    SUBMACHINE_GUNS = 3954685534
+    GRENADE_LAUNCHER = 153950757
+    LINEAR_FUSION_RIFLE = 1504945536
+    TRACE_RIFLE = 2489664120
+    BOW = 3317538576
+    SUBMACHINE_GUN = 3954685534
 

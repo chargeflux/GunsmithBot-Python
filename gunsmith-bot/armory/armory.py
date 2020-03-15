@@ -3,63 +3,189 @@ import os
 import glob
 import json
 import logging
+import itertools
 from dataclasses import dataclass
+from typing import List
 from . import constants
 
 logger = logging.getLogger('Armory')
 
 class Armory:
+    '''
+    Interfaces with Bungie's manifest to query for weapons
+
+    Attributes 
+    ----------
+    _current_manifest_path : str
+        The path to Bungie's manifest of static definitions in Destiny 2
+    '''
+
     def __init__(self, current_manifest):
         self._current_manifest_path = current_manifest
 
     def update_current_manifest_path(self, current_manifest):
         self._current_manifest_path = current_manifest
 
-    def __search_weapon__(self, name):
+    def __search_weapon(self, name):
+        '''
+        Search for a Destiny 2 weapon in "DestinyInventoryItemDefinition" and extract JSON for all
+        matches
+
+        Parameters
+        ----------
+        name: str
+            The name of the Destiny 2 weapon
+
+        Returns
+        -------
+        weapons: [WeaponResult]
+            The weapons found in the manifest where each is a `WeaponResult`
+        '''
         with sqlite3.connect(self._current_manifest_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-            SELECT item.id, key, value FROM DestinyInventoryItemDefinition as item, json_each(item.json, '$')
-            where json_extract(item.json, '$.displayProperties.name') LIKE ? and 
-            json_extract(item.json, '$.sockets') is not null and
-            (key) in ("displayProperties", "sockets", "itemCategoryHashes", "displaySource")''', (name + "%",))
-            
-            weapons = {}
+            SELECT item.id, json FROM DestinyInventoryItemDefinition as item 
+            WHERE json_extract(item.json, '$.displayProperties.name') LIKE ?''', (name + "%",))
+
+            weapons = []
             for row in cursor:
-                weapons.setdefault(row[0], {}).update({row[1]: row[2]})
+                raw_weapon_data = json.loads(row[1])
+                if self.__validate_weapon_search(raw_weapon_data):
+                    weapons.append(WeaponResult(row[0], raw_weapon_data))
 
             if not weapons:
                 raise ValueError
             else:
                 return weapons
     
-    def __process_weapon__(self, weapon_data):
-        pass
+    def __validate_weapon_search(self, raw_weapon_data):
+        '''
+        Validate the JSON of weapon found from querying the manifest
+
+        Parameters
+        ----------
+        raw_weapon_data: dict()
+            Derived from json data for the weapon
+
+        Returns
+        -------
+        bool
+            If the item found is a weapon
+        '''
+        if 'sockets' not in raw_weapon_data.keys():
+            return False
+        elif constants.WeaponBase.WEAPON.value not in raw_weapon_data["itemCategoryHashes"]:
+            return False
+        return True
+
 
     def get_weapon_details(self, name):
-        weapons_data_raw = self.__search_weapon__(name)
+        '''
+        Search and retrieve information about a Destiny 2 weapon from Bungie's manifest
 
-        found_weapons = []
-        for id, weapon_data_raw in weapons_data_raw.items():
-            found_weapons.append(Weapon(id, weapon_data_raw, self._current_manifest_path))
+        Parameters
+        ----------
+        name: str
+            The name of the Destiny 2 weapon
 
-        return found_weapons
+        Returns
+        -------
+        weapons : [Weapon]
+            A list where each individual weapon is a `Weapon`
+        '''
 
-class Weapon:
-    def __init__(self, id, weapon_data_raw, current_manifest):
-        self.db_id = id
+        weapon_results = self.__search_weapon(name)
+
+        weapons = []
+        for weapon_result in weapon_results:
+            weapons.append(Weapon(weapon_result, self._current_manifest_path))
+
+        return weapons
+
+class WeaponResult:
+    '''
+    Represents the JSON data for a weapon
+
+    Attributes
+    ----------
+    db_id: int
+        The database id of the weapon in Bungie's manifest
+    
+    display_properties_data: dict
+        Holds information about the name, description and image of the weapon
+
+    socket_data: dict
+        Holds information about the intrinsic nature and possible perks for the weapon
+    
+    item_categories_hash_data: dict
+        Holds information about the categories which this weapon is classifed as
+
+    display_source_data: str
+        Determines if it has random rolls or not
+    '''
+
+    def __init__(self, db_id, raw_weapon_data):
+        self.db_id = db_id
+        self.display_properties_data = raw_weapon_data["displayProperties"]
+        self.socket_data = raw_weapon_data["sockets"]
+        self.item_categories_hash_data = sorted(raw_weapon_data["itemCategoryHashes"])
+        self.display_source_data = raw_weapon_data["displaySource"]
+
+class Weapon():
+    '''
+    Contains all the necessary information for a Destiny 2 weapon
+
+    Attributes 
+    ----------
+    db_id : int
+        The database id of the weapon in Bungie's manifest
+    
+    _current_manifest_path : str
+        The path to Bungie's manifest of static definitions in Destiny 2
+    
+    weapon_base_info: WeaponBaseArchetype
+    
+    name : str
+        The name of the weapon
+    
+    description: str
+        The description of the weapon
+
+    icon: str
+        The relative url to the icon of the weapon at bungie.net
+    
+    intrinsic: WeaponPerkPlugInfo
+        Represents the intrinsic nature of the weapon, e.g., adaptive frame
+    
+    weapon_perks: [WeaponPerkPlugInfo]
+        Holds all the possible plugs for each perk if random rolled. Otherwise it will show
+        the static roll
+    
+    has_random_rolls: bool
+        If the weapon has random rolls or not
+    '''
+
+    def __init__(self, weapon_result, current_manifest):
+        self.db_id = weapon_result.db_id
         self._current_manifest_path = current_manifest
-        self.weapon_base_info = WeaponBaseArchetype()
-        self.name = None
-        self.description = None
-        self.icon = None
-        self.intrinsic = None
-        self.WeaponPerks = []
 
-        self.__extract_data__(weapon_data_raw)
+        self.weapon_base_info = self.__set_base_info(weapon_result.item_categories_hash_data)
+        
+        self.name = weapon_result.display_properties_data["name"]
+        self.description = weapon_result.display_properties_data["description"]
+        self.icon = weapon_result.display_properties_data["icon"]
+        
+        self.intrinsic, self.weapon_perks = self.__process_socket_data(weapon_result.socket_data)
+        
+        if weapon_result.display_source_data:
+            self.has_random_rolls = True
+        else:
+            self.has_random_rolls = False
     
     def convert_hash(self, val):
         '''
+        Converts the item hash to the id used by the database
+
         References:
         - Function originates from @vpzed: https://github.com/vpzed/Destiny2-API-Info/wiki/API-Introduction-Part-3-Manifest#manifest-lookups
         - https://github.com/Bungie-net/api/wiki/Obtaining-Destiny-Definitions-%22The-Manifest%22#step-4-open-and-use-the-data-contained-within
@@ -68,155 +194,191 @@ class Weapon:
             val = val - (1 << 32)
         return val
 
-    def __extract_data__(self, weapon_data_raw):
+    def __process_socket_intrinsic(self, socket, cursor):
+        '''
+        Processes socket entry corresponding to information about the intrinsic nature of the weapon.
+        This socket usually only has a "reusablePlugSetHash" field since intrinsic nature of 
+        a weapon is not randomized. Use "DestinyPlugSetDefinition" and "DestinyInventoryItemDefinition" 
+        with the hash to determine the plug for this socket corresponding to intrinsic nature.
+
+        Parameters
+        ----------
+        socket : dict
+            The socket entry corresponding to the intrinsic nature of the weapon
+        cursor : sqlite3.Cursor
+            Necessary to query SQLite3 DB
+
+        Returns
+        -------
+        WeaponPerkPlugInfo or None
+        '''
+
+        if 'reusablePlugSetHash' not in socket:
+            return None
+
+        reusablePlugSetHash = socket['reusablePlugSetHash']
+        converted_reusablePlugSetHash = self.convert_hash(reusablePlugSetHash)
+
+        cursor.execute(
+        '''
+        SELECT json_extract(j.value, '$.plugItemHash') 
+        FROM DestinyPlugSetDefinition as item, 
+        json_each(item.json, '$.reusablePlugItems') as j
+        WHERE item.id = ?''', (converted_reusablePlugSetHash,))
+
+        plug_hash = cursor.fetchone()[0]
+        
+        converted_plug_hash = self.convert_hash(plug_hash)
+
+        cursor.execute(
+            '''
+            SELECT json_extract(item.json, "$.displayProperties") 
+            FROM DestinyInventoryItemDefinition as item 
+            WHERE item.id = ?''', (converted_plug_hash,))
+        
+        plug_info = json.loads(cursor.fetchone()[0])
+
+        return WeaponPerkPlugInfo(name = plug_info['name'], 
+                                  description = plug_info['description'],
+                                  icon = plug_info['icon'])
+
+    def __process_socket_data_perks(self, socket_entries, socket_indexes, cursor):
+        '''
+        Processes socket entries corresponding to information about the perks of the weapon.
+        Each socket usually has a "reusablePlugSetHash" field if it is a static-rolled weapon or
+        "randomizedPlugSetHash" field if it is a random-rolled weapon. Use "DestinyPlugSetDefinition" 
+        and "DestinyInventoryItemDefinition" with the hash to determine the plug or plugs if 
+        random rolled for this socket
+
+        Parameters
+        ----------
+        socket_entries : dict
+            The socket entries to be traversed to determine all plugs for weapon perks
+        
+        socket_indexes : dict
+            The indexes corresponding to weapon perks
+        
+        cursor : sqlite3.Cursor
+            Necessary to query SQLite3 DB
+
+        Returns
+        -------
+        weapon_perks : [WeaponPerk]
+            Returns a list of weapon perks where each is a `WeaponPerk`
+        '''
+        weapon_perks = []
+        for order_idx, index in enumerate(socket_indexes):
+            socket = socket_entries[index]
+            socket_type_hash = socket['socketTypeHash']
+            converted_socket_type_hash = self.convert_hash(socket_type_hash)
+                
+            # Assume plugWhitelist always has a len of 1
+            cursor.execute(
+            '''
+            SELECT json_extract(item.json, "$.plugWhitelist[0]") 
+            FROM DestinySocketTypeDefinition as item 
+            WHERE item.id = ?''', (converted_socket_type_hash,))
+        
+            plug_category_info = json.loads(cursor.fetchone()[0])
+
+            try:
+                plug_category = constants.PlugCategoryHash(plug_category_info["categoryHash"])
+            except ValueError:
+                continue
+
+            if 'randomizedPlugSetHash' in socket:
+                plug_set_hash = socket['randomizedPlugSetHash']
+            elif 'reusablePlugSetHash' in socket:
+                plug_set_hash = socket['reusablePlugSetHash']
+            else:
+                continue
+                
+            converted_plug_set_hash = self.convert_hash(plug_set_hash)
+
+            cursor.execute(
+            '''
+            SELECT json_extract(j.value, '$.plugItemHash') 
+            FROM DestinyPlugSetDefinition as item, 
+            json_each(item.json, '$.reusablePlugItems') as j
+            WHERE item.id = ?''', (converted_plug_set_hash,))
+
+            converted_plug_id_results = list(map(self.convert_hash,itertools.chain.from_iterable(cursor)))
+
+            # SQL does not support binding to a list. Therefore we can dynamically insert question marks
+            # based on the length of the converted_plug_id_results. Additionally, since we are only inserting 
+            # question marks, we are not exposing ourselves to a security risk
+            cursor.execute(
+                f'''
+                SELECT json_extract(item.json, "$.displayProperties") 
+                FROM DestinyInventoryItemDefinition as item
+                WHERE item.id in ({",".join(["?"]*len(converted_plug_id_results))})''', converted_plug_id_results)
+            
+            plugs = []
+            for plug in cursor:
+                plug_info = json.loads(plug[0])
+                plugs.append(WeaponPerkPlugInfo(name = plug_info['name'], 
+                                                description = plug_info['description'],
+                                                icon = plug_info['icon']))
+
+            weapon_perks.append(WeaponPerk(idx = order_idx, name = plug_category.name.title(), plugs = plugs))
+        return weapon_perks
+
+
+    def __process_socket_data(self, socket_data):
+        '''
+        Processes socket data for information about the intrinsic nature and perks
+        for the weapon.
+
+        Parameters
+        ----------
+        socket_data : dict
+            The socket data of the weapon to be processed
+
+        Returns
+        -------
+        intrinsic : WeaponPerkPlugInfo
+        
+        weapon_perks : [WeaponPerk]
+            Returns a list of weapon perks where each is a `WeaponPerk`
+        '''
         with sqlite3.connect(self._current_manifest_path) as conn:
             cursor = conn.cursor()
-            for key,value in weapon_data_raw.items():
-                if key == "sockets":
-                    socket_data = json.loads(value)
-                    for category_data in socket_data["socketCategories"]:
-                        if category_data["socketCategoryHash"] == constants.SocketCategoryHash().INTRINSICS:
-                            for index in category_data['socketIndexes']:
-                                socket = socket_data["socketEntries"][index]
+            for category_data in socket_data["socketCategories"]:
+                if category_data["socketCategoryHash"] == constants.SocketCategoryHash.INTRINSICS.value:
+                        index = category_data['socketIndexes'][0] # assume only one intrinsic
+                        socket = socket_data["socketEntries"][index]
+                        intrinsic = self.__process_socket_intrinsic(socket, cursor)
+                if category_data["socketCategoryHash"] == constants.SocketCategoryHash.WEAPON_PERKS.value:
+                    weapon_perks = self.__process_socket_data_perks(socket_data["socketEntries"], 
+                                                                    category_data['socketIndexes'], 
+                                                                    cursor)
+        return intrinsic, weapon_perks
+                      
 
-                                plugs = []
-                                if 'reusablePlugSetHash' in socket:
-                                    reusablePlugSetHash = socket['reusablePlugSetHash']
-                                    converted_reusablePlugSetHash = self.convert_hash(reusablePlugSetHash)
+    def __set_base_info(self, item_categories_hash_data):
+        '''
+        Sets the base archetype information for the weapon 
 
-                                    cursor.execute(
-                                    '''
-                                    SELECT json_extract(j.value, '$.plugItemHash') 
-                                    FROM DestinyPlugSetDefinition as item, 
-                                    json_each(item.json, '$.reusablePlugItems') as j 
-                                    WHERE item.id = ?''', (converted_reusablePlugSetHash,))
+        Parameters
+        ----------
+        item_categories_hash_data : [int]
+            The hashes that correspond to the item categories that the weapon is classified as
+        
+        Returns
+        -------
+        WeaponBaseArchetype
+        '''
 
-                                    for plug_res in cursor:
-                                        plug_hash = plug_res[0]
-                                        plug_cursor = conn.cursor()
-                                        
-                                        converted_plug_hash = self.convert_hash(plug_hash)
+        weapon_base_info = WeaponBaseArchetype()
+        for item_category_hash in item_categories_hash_data[1:]:
+            try:
+                category = constants.WeaponBase(item_category_hash)
+                weapon_base_info.set_field(category)
+            except ValueError:
+                logger.error(f"Failed to match weapon category: {item_category_hash}")
+        return weapon_base_info
 
-                                        plug_cursor.execute(
-                                            '''
-                                            SELECT json_extract(item.json, "$.displayProperties") 
-                                            FROM DestinyInventoryItemDefinition as item 
-                                            WHERE item.id = ?''', (converted_plug_hash,))
-                                        
-                                        plug_info = json.loads(plug_cursor.fetchone()[0])
-
-                                        plugs.append(WeaponPerkPlugInfo(name = plug_info['name'], 
-                                                                        description = plug_info['description'],
-                                                                        icon = plug_info['icon']))
-                            self.intrinsic = plugs
-                        if category_data["socketCategoryHash"] == constants.SocketCategoryHash().WEAPON_PERKS:
-                            for order_idx, index in enumerate(category_data['socketIndexes']):
-                                socket = socket_data["socketEntries"][index]
-                                socket_type_hash = socket['socketTypeHash']
-                                converted_socket_type_hash = self.convert_hash(socket_type_hash)
-                                    
-                                # Assume plugWhitelist always has a len of 1
-                                cursor.execute(
-                                '''
-                                SELECT json_extract(item.json, "$.plugWhitelist[0]") 
-                                FROM DestinySocketTypeDefinition as item 
-                                WHERE item.id = ?''', (converted_socket_type_hash,))
-                            
-                                plug_category_info = json.loads(cursor.fetchone()[0])
-
-                                if not constants.PlugCategoryHash.is_valid(plug_category_info["categoryIdentifier"].title()):
-                                    continue
-
-                                plugs = []
-                                if 'randomizedPlugSetHash' in socket:
-                                    randomizedPlugSetHash = socket['randomizedPlugSetHash']
-                                    
-                                    converted_randomizedPlugSetHash = self.convert_hash(randomizedPlugSetHash)
-
-                                    cursor.execute(
-                                    '''
-                                    SELECT json_extract(j.value, '$.plugItemHash') 
-                                    FROM DestinyPlugSetDefinition as item, 
-                                    json_each(item.json, '$.reusablePlugItems') as j
-                                    WHERE item.id = ?''', (converted_randomizedPlugSetHash,))
-
-                                    for plug_res in cursor:
-                                        plug_hash = plug_res[0]
-                                        converted_plug_hash = self.convert_hash(plug_hash)
-                                        
-                                        plug_cursor = conn.cursor()
-                                        
-                                        plug_cursor.execute(
-                                            '''
-                                            SELECT json_extract(item.json, "$.displayProperties") 
-                                            FROM DestinyInventoryItemDefinition as item
-                                            WHERE item.id = ?''', (converted_plug_hash,))
-                                        
-                                        plug_info = json.loads(plug_cursor.fetchone()[0])
-
-                                        plugs.append(WeaponPerkPlugInfo(name = plug_info['name'], 
-                                                                        description = plug_info['description'],
-                                                                        icon = plug_info['icon']))
-
-                                elif 'reusablePlugSetHash' in socket:
-                                    reusablePlugSetHash = socket['reusablePlugSetHash']
-                                    converted_reusablePlugSetHash = self.convert_hash(reusablePlugSetHash)
-
-                                    cursor.execute(
-                                    '''
-                                    SELECT json_extract(j.value, '$.plugItemHash') 
-                                    FROM DestinyPlugSetDefinition as item, 
-                                    json_each(item.json, '$.reusablePlugItems') as j 
-                                    WHERE item.id = ?''', (converted_reusablePlugSetHash,))
-
-                                    for plug_res in cursor:
-                                        plug_hash = plug_res[0]
-                                        plug_cursor = conn.cursor()
-                                        
-                                        converted_plug_hash = self.convert_hash(plug_hash)
-
-                                        plug_cursor.execute(
-                                            '''
-                                            SELECT json_extract(item.json, "$.displayProperties") 
-                                            FROM DestinyInventoryItemDefinition as item 
-                                            WHERE item.id = ?''', (converted_plug_hash,))
-                                        
-                                        plug_info = json.loads(plug_cursor.fetchone()[0])
-
-                                        plugs.append(WeaponPerkPlugInfo(name = plug_info['name'], 
-                                                                        description = plug_info['description'],
-                                                                        icon = plug_info['icon']))
-
-                                self.ProcessWeaponPerk(order_idx, plug_category_info["categoryHash"], plugs)
-                                
-                if key == "displayProperties":
-                    display_data = json.loads(value)
-                    self.name = display_data["name"]
-                    self.description = display_data["description"]
-                    self.icon = display_data["icon"]
-
-                if key == "itemCategoryHashes":
-                    item_categories_hashes = sorted(json.loads(value))
-                    if item_categories_hashes.pop(0) != constants.WeaponBase.WEAPON.value:
-                        logger.error("Item is not a weapon")
-                        raise ValueError("Item is not a weapon")
-                    
-                    # Take only the first 2 hashes after weapon
-                    for item_category_hash in item_categories_hashes[0:2]:
-                        try:
-                            category = constants.WeaponBase(item_category_hash)
-                        except ValueError as e:
-                            logger.error("Failed to match weapon category")
-                            raise e
-                        self.weapon_base_info.set_field(category)
-
-    def ProcessWeaponPerk(self, order_idx, plug_category_hash, plugs): 
-        plug_category = constants.PlugCategoryHash(plug_category_hash)
-        self.WeaponPerks.append(WeaponPerk(idx = order_idx, 
-                                           name = plug_category.name, 
-                                           plugs = plugs))
-
-@dataclass()
+@dataclass
 class WeaponPerkPlugInfo:
     name: str
     description: str
@@ -225,21 +387,28 @@ class WeaponPerkPlugInfo:
     def __str__(self):
         return self.name
 
-@dataclass()
+@dataclass
 class WeaponPerk:
     idx: int
     name: str
-    plugs: [WeaponPerkPlugInfo]
+    plugs: List[WeaponPerkPlugInfo]
 
     def __str__(self):
         return '\n'.join(map(str,self.plugs))
 
 @dataclass
 class WeaponBaseArchetype:
+    '''
+    weapon_class: constants.WeaponBase
+        Determines if the weapon is a kinetic, energy or power weapon
+    
+    weapon_type: constants.WeaponBase
+        Determines if the weapon is a hand cannon, pulse rifle, sword, etc.
+    '''
     weapon_class: constants.WeaponBase = None
     weapon_type: constants.WeaponBase = None
 
-    def set_field(self, input):
+    def set_field(self, input: constants.WeaponBase):
         if input.value < 5:
             self.weapon_class = input
         else:

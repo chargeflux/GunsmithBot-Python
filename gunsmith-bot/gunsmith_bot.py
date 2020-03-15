@@ -30,6 +30,10 @@ bot = commands.Bot(command_prefix="!", description='Retrieve rolls for Destiny 2
 
 @bot.event
 async def on_ready():
+    """
+    Triggered when the bot successfully logs into Discord and is ready. Note that this is not limited to
+    the start up of the bot.
+    """
     logger.log(logging.INFO, f'We have logged in as {bot.user}')
     if not current_state.current_manifest:
         try:
@@ -44,34 +48,44 @@ async def on_ready():
             await bot.logout()
 
 @bot.command()
-async def gunsmith(ctx, *args):
-    if not args:
-        return
-    
-    weapon = ' '.join(args)
+async def gunsmith(ctx, *, arg):
+    '''
+    This function corresponds to the "!gunsmith <weapon>" command.
+
+    Parameters
+    ----------
+    ctx
+        The context of the command being invoked. Constructed by `discord.py`
+    *args
+        The arguments of the command, after "!gunsmith"
+    '''
+    weapon = arg
 
     armory = Armory(current_state.current_manifest)
     weapons = armory.get_weapon_details(weapon)
     result = weapons[0] #TODO: pagination
 
-
     DESCRIPTION = str(result.weapon_base_info) + "\n" + result.description
     embed = discord.Embed(title=result.name, description= DESCRIPTION, color=constants.DISCORD_BG_HEX)
 
-    for perk in result.WeaponPerks:
+    for perk in result.weapon_perks:
         embed.add_field(name=perk.name, value=str(perk), inline=False)
 
     await ctx.send(embed=embed)
 
 @gunsmith.error
 async def on_error(ctx, error):
-    logger.exception(error.original)
-    if isinstance(error.original, ValueError):
-        logger.error(ctx.message.content)
-        await ctx.send('Weapon could not be found.')
-    if isinstance(error.original, TypeError):
-        logger.error('Failed to parse weapon')
-        await ctx.send('Failed to parse weapon. Please notify my creator.')
+    if hasattr(error, 'original'):
+        logger.exception(error.original)
+        if isinstance(error.original, ValueError):
+            logger.error(ctx.message.content, exc_info=1)
+            await ctx.send('Weapon could not be found.')
+        if isinstance(error.original, TypeError):
+            logger.error(ctx.message.content)
+            logger.error('Failed to parse weapon', exec_info=1)
+            await ctx.send('Failed to parse weapon. Please notify my creator.')
+    if isinstance(error, commands.BadArgument):
+        await ctx.send("Please enter the weapon name.")
 
 logger.info("Starting up bot")
 bot.run(DISCORD_KEY)

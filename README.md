@@ -12,6 +12,8 @@ Discord bot to retrieve weapon rolls for Destiny 2
 
 Set your Discord API key to `DISCORD_KEY` as an environment variable
 
+Set your Bungie API key to `BUNGIE_KEY` as an environment variable
+
 ## Contributing
 
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
