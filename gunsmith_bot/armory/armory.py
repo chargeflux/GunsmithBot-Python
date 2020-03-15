@@ -20,11 +20,14 @@ class Armory:
         The path to Bungie's manifest of static definitions in Destiny 2
     '''
 
-    def __init__(self, current_manifest):
-        self._current_manifest_path = current_manifest
+    def __init__(self, current_manifest_path):
+        self._current_manifest_path = current_manifest_path
 
     def update_current_manifest_path(self, current_manifest):
         self._current_manifest_path = current_manifest
+    
+    def get_current_manifest(self):
+        return self._current_manifest_path
 
     def __search_weapon(self, name):
         '''
@@ -182,7 +185,7 @@ class Weapon():
         else:
             self.has_random_rolls = False
     
-    def convert_hash(self, val):
+    def __convert_hash(self, val):
         '''
         Converts the item hash to the id used by the database
 
@@ -199,7 +202,7 @@ class Weapon():
         Processes socket entry corresponding to information about the intrinsic nature of the weapon.
         This socket usually only has a "reusablePlugSetHash" field since intrinsic nature of 
         a weapon is not randomized. Use "DestinyPlugSetDefinition" and "DestinyInventoryItemDefinition" 
-        with the hash to determine the plug for this socket corresponding to intrinsic nature.
+        with the hash to obtain the plug for this socket corresponding to intrinsic nature.
 
         Parameters
         ----------
@@ -217,7 +220,7 @@ class Weapon():
             return None
 
         reusablePlugSetHash = socket['reusablePlugSetHash']
-        converted_reusablePlugSetHash = self.convert_hash(reusablePlugSetHash)
+        converted_reusablePlugSetHash = self.__convert_hash(reusablePlugSetHash)
 
         cursor.execute(
         '''
@@ -228,7 +231,7 @@ class Weapon():
 
         plug_hash = cursor.fetchone()[0]
         
-        converted_plug_hash = self.convert_hash(plug_hash)
+        converted_plug_hash = self.__convert_hash(plug_hash)
 
         cursor.execute(
             '''
@@ -246,9 +249,10 @@ class Weapon():
         '''
         Processes socket entries corresponding to information about the perks of the weapon.
         Each socket usually has a "reusablePlugSetHash" field if it is a static-rolled weapon or
-        "randomizedPlugSetHash" field if it is a random-rolled weapon. Use "DestinyPlugSetDefinition" 
-        and "DestinyInventoryItemDefinition" with the hash to determine the plug or plugs if 
-        random rolled for this socket
+        "randomizedPlugSetHash" field if it is a random-rolled weapon. Use "socketTypeHash" 
+        with "DestinySocketTypeDefinition" to verify if the category of whitelisted plugs for this
+        socket is of interest. Then, use "DestinyPlugSetDefinition" and "DestinyInventoryItemDefinition" 
+        with the hash to obtain the plug or plugs if random rolled for this socket.
 
         Parameters
         ----------
@@ -270,7 +274,7 @@ class Weapon():
         for order_idx, index in enumerate(socket_indexes):
             socket = socket_entries[index]
             socket_type_hash = socket['socketTypeHash']
-            converted_socket_type_hash = self.convert_hash(socket_type_hash)
+            converted_socket_type_hash = self.__convert_hash(socket_type_hash)
                 
             # Assume plugWhitelist always has a len of 1
             cursor.execute(
@@ -293,7 +297,7 @@ class Weapon():
             else:
                 continue
                 
-            converted_plug_set_hash = self.convert_hash(plug_set_hash)
+            converted_plug_set_hash = self.__convert_hash(plug_set_hash)
 
             cursor.execute(
             '''
@@ -302,7 +306,7 @@ class Weapon():
             json_each(item.json, '$.reusablePlugItems') as j
             WHERE item.id = ?''', (converted_plug_set_hash,))
 
-            converted_plug_id_results = list(map(self.convert_hash,itertools.chain.from_iterable(cursor)))
+            converted_plug_id_results = list(map(self.__convert_hash,itertools.chain.from_iterable(cursor)))
 
             # SQL does not support binding to a list. Therefore we can dynamically insert question marks
             # based on the length of the converted_plug_id_results. Additionally, since we are only inserting 
