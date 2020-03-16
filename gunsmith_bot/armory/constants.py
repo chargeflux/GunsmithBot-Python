@@ -52,3 +52,11 @@ class WeaponBase(Enum):
     BOW = 3317538576
     SUBMACHINE_GUN = 3954685534
 
+class WeaponTierType(Enum):
+    BASIC = 3340296461
+    UNCOMMON = 2395677314
+    RARE = 2127292149
+    LEGENDARY = 4008398120
+    EXOTIC = 2759499571
+    
+

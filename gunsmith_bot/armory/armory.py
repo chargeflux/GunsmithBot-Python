@@ -8,7 +8,10 @@ from dataclasses import dataclass
 from typing import List
 from . import constants
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s', 
+                        datefmt='%Y-%m-%d %I:%M:%S %p')
 logger = logging.getLogger('Armory')
+logger.setLevel(logging.INFO)
 
 class Armory:
     '''
@@ -125,6 +128,9 @@ class WeaponResult:
 
     display_source_data: str
         Determines if it has random rolls or not
+    
+    tierTypeHash : dict
+        Determines the tier type of the wepaon
     '''
 
     def __init__(self, db_id, raw_weapon_data):
@@ -133,6 +139,7 @@ class WeaponResult:
         self.socket_data = raw_weapon_data["sockets"]
         self.item_categories_hash_data = sorted(raw_weapon_data["itemCategoryHashes"])
         self.display_source_data = raw_weapon_data["displaySource"]
+        self.tier_type_hash = raw_weapon_data["inventory"]["tierTypeHash"]
 
 class Weapon:
     '''
@@ -172,18 +179,18 @@ class Weapon:
         self.db_id = weapon_result.db_id
         self._current_manifest_path = current_manifest
 
-        self.weapon_base_info = self.__set_base_info(weapon_result.item_categories_hash_data)
+        self.weapon_base_info = self.__set_base_info(weapon_result.item_categories_hash_data, weapon_result.tier_type_hash)
         
         self.name = weapon_result.display_properties_data["name"]
         self.description = weapon_result.display_properties_data["description"]
         self.icon = weapon_result.display_properties_data["icon"]
         
-        self.intrinsic, self.weapon_perks = self.__process_socket_data(weapon_result.socket_data)
-        
         if weapon_result.display_source_data:
             self.has_random_rolls = True
         else:
             self.has_random_rolls = False
+
+        self.intrinsic, self.weapon_perks = self.__process_socket_data(weapon_result.socket_data)
     
     def __convert_hash(self, val):
         '''
@@ -357,9 +364,9 @@ class Weapon:
                                                                     category_data['socketIndexes'], 
                                                                     cursor)
         return intrinsic, weapon_perks
-                      
 
-    def __set_base_info(self, item_categories_hash_data):
+
+    def __set_base_info(self, item_categories_hash_data, tier_type_hash):
         '''
         Sets the base archetype information for the weapon 
 
@@ -379,7 +386,12 @@ class Weapon:
                 category = constants.WeaponBase(item_category_hash)
                 weapon_base_info.set_field(category)
             except ValueError:
-                logger.error(f"Failed to match weapon category: {item_category_hash}")
+                logger.error(f"Failed to match weapon category hash: {item_category_hash}")
+        try: 
+            weapon_tier = constants.WeaponTierType(tier_type_hash)
+            weapon_base_info.weapon_tier_type = weapon_tier
+        except ValueError:
+            logger.error(f"Failed to match tier type hash: {tier_type_hash}")
         return weapon_base_info
 
 @dataclass
@@ -411,6 +423,7 @@ class WeaponBaseArchetype:
     '''
     weapon_class: constants.WeaponBase = None
     weapon_type: constants.WeaponBase = None
+    weapon_tier_type: constants.WeaponTierType = None
 
     def set_field(self, input: constants.WeaponBase):
         if input.value < 5:
@@ -419,13 +432,15 @@ class WeaponBaseArchetype:
             self.weapon_type = input
 
     def __str__(self):
-        return '**' + self.weapon_class.name.title() + ' ' + self.weapon_type.name.replace('_',' ').title() + '**'
-
-
-def setupLogger():
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s', 
-                        datefmt='%Y-%m-%d %I:%M:%S %p')
-    logger.setLevel(logging.INFO)
-
-if __name__ == "__main__":
-    setupLogger()
+        str_to_construct = ''
+        if self.weapon_class:
+            str_to_construct = self.weapon_class.name.title()
+        if self.weapon_type:
+            str_to_construct += ' ' + self.weapon_type.name.replace('_',' ').title()
+        if self.weapon_tier_type:
+            str_to_construct += ' ' + '(' + self.weapon_tier_type.name.title() + ')'
+        if str_to_construct:
+            if str_to_construct[1] == "(":
+                str_to_construct = str_to_construct[2:-1]
+            return '**' + str_to_construct.strip() + '**'
+        return ''
