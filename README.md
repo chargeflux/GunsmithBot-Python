@@ -4,9 +4,11 @@ Discord bot to retrieve weapon rolls for Destiny 2
 
 ## Requirements
 
-- Python 3.8.1
+- Python 3.8
 - [discord.py](https://github.com/Rapptz/discord.py)
 - [pydest](https://github.com/jgayfer/pydest)
+  - Used to handle downloading and updating Bungie's manifest
+- [pytest](https://docs.pytest.org/en/latest/getting-started.html)
 
 ## Setup
 

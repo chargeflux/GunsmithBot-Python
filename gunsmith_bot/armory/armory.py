@@ -134,7 +134,7 @@ class WeaponResult:
         self.item_categories_hash_data = sorted(raw_weapon_data["itemCategoryHashes"])
         self.display_source_data = raw_weapon_data["displaySource"]
 
-class Weapon():
+class Weapon:
     '''
     Contains all the necessary information for a Destiny 2 weapon
 
