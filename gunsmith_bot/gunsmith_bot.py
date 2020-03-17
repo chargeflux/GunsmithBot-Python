@@ -67,10 +67,13 @@ async def gunsmith(ctx, *, arg):
 
     DESCRIPTION = str(result.weapon_base_info) + "\n" + result.description
     embed = discord.Embed(title=result.name, description= DESCRIPTION, color=constants.DISCORD_BG_HEX)
+    embed.set_thumbnail(url=result.icon)
 
     for perk in result.weapon_perks:
-        embed.add_field(name=perk.name, value=str(perk), inline=False)
-
+        if (perk.idx + 1) % 3 == 0:
+            embed.add_field(name="\u200b", value="\u200b", inline=True)
+        embed.add_field(name=perk.name, value=perk, inline=True)
+    embed.add_field(name="\u200b", value="\u200b", inline=True)
     await ctx.send(embed=embed)
 
 @gunsmith.error
@@ -78,12 +81,15 @@ async def on_error(ctx, error):
     if hasattr(error, 'original'):
         logger.exception(error.original)
         if isinstance(error.original, ValueError):
-            logger.error(ctx.message.content, exc_info=1)
+            logger.error(ctx.message.content)
             await ctx.send('Weapon could not be found.')
         if isinstance(error.original, TypeError):
             logger.error(ctx.message.content)
-            logger.error('Failed to parse weapon', exec_info=1)
+            logger.error('Failed to parse weapon')
             await ctx.send('Failed to parse weapon. Please notify my creator.')
+        if isinstance(error.original, discord.errors.HTTPException):
+            if error.original.status == 429:
+                logger.critical("Bot is rate-limited")
     if isinstance(error, commands.BadArgument):
         await ctx.send("Please enter the weapon name.")
 

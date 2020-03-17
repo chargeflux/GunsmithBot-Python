@@ -104,7 +104,11 @@ class Armory:
 
         weapons = []
         for weapon_result in weapon_results:
-            weapons.append(Weapon(weapon_result, self._current_manifest_path))
+            weapon = Weapon(weapon_result, self._current_manifest_path)
+            if weapon.has_random_rolls:
+                weapons.insert(0, weapon)
+            else:
+                weapons.append(weapon)
 
         return weapons
 
@@ -183,7 +187,7 @@ class Weapon:
         
         self.name = weapon_result.display_properties_data["name"]
         self.description = weapon_result.display_properties_data["description"]
-        self.icon = weapon_result.display_properties_data["icon"]
+        self.icon = constants.BUNGIE_URL_ROOT + weapon_result.display_properties_data["icon"]
         
         if weapon_result.display_source_data:
             self.has_random_rolls = True

@@ -1,5 +1,7 @@
 from enum import Enum
 
+BUNGIE_URL_ROOT = "https://www.bungie.net"
+
 class SocketCategoryHash(Enum):
     INTRINSICS = 3956125808
     WEAPON_PERKS = 4241085061
