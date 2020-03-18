@@ -4,6 +4,8 @@ import glob
 import json
 import logging
 import itertools
+from operator import attrgetter
+import difflib
 from dataclasses import dataclass
 from typing import List
 from . import constants
@@ -27,15 +29,15 @@ class Armory:
     def get_current_manifest(self):
         return self._current_manifest_path
 
-    def __search_weapon(self, search):
+    def __search_weapon(self, query):
         '''
         Search for a Destiny 2 weapon in "DestinyInventoryItemDefinition" and extract JSON for all
         matches
 
         Parameters
         ----------
-        name: str
-            The name of the Destiny 2 weapon
+        query: str
+            The name of the Destiny 2 weapon to search
 
         Returns
         -------
@@ -46,7 +48,7 @@ class Armory:
             cursor = conn.cursor()
             cursor.execute('''
             SELECT item.id, json FROM DestinyInventoryItemDefinition as item 
-            WHERE json_extract(item.json, '$.displayProperties.name') LIKE ?''', (search + "%",))
+            WHERE json_extract(item.json, '$.displayProperties.name') LIKE ?''', ("%" + query + "%",))
 
             weapons = []
             for row in cursor:
@@ -80,14 +82,14 @@ class Armory:
         return True
 
 
-    def get_weapon_details(self, name):
+    def get_weapon_details(self, query):
         '''
         Search and retrieve information about a Destiny 2 weapon from Bungie's manifest
 
         Parameters
         ----------
-        name: str
-            The name of the Destiny 2 weapon
+        query: str
+            The name of the Destiny 2 weapon to search
 
         Returns
         -------
@@ -95,16 +97,17 @@ class Armory:
             A list where each individual weapon is a `Weapon`
         '''
 
-        weapon_results = self.__search_weapon(name)
+        weapon_results = self.__search_weapon(query)
 
         weapons = []
         for weapon_result in weapon_results:
-            weapon = Weapon(weapon_result, self._current_manifest_path)
+            weapon = Weapon(weapon_result, query, self._current_manifest_path)
             if weapon.has_random_rolls:
                 weapons.insert(0, weapon)
             else:
                 weapons.append(weapon)
 
+        weapons.sort(key = attrgetter('similarity_score'), reverse= True)
         return weapons
 
 class WeaponResult:
@@ -172,9 +175,12 @@ class Weapon:
     
     has_random_rolls: bool
         If the weapon has random rolls or not
+    
+    similarity_score: float
+        The similarity score between the name of the weapon and query
     '''
 
-    def __init__(self, weapon_result, current_manifest):
+    def __init__(self, weapon_result, query, current_manifest):
         self.db_id = weapon_result.db_id
         self._current_manifest_path = current_manifest
 
@@ -190,7 +196,9 @@ class Weapon:
             self.has_random_rolls = False
 
         self.intrinsic, self.weapon_perks = self.__process_socket_data(weapon_result.socket_data)
-    
+
+        self.similarity_score = difflib.SequenceMatcher(None, self.name, query).ratio()
+
     def __convert_hash(self, val):
         '''
         Converts the item hash to the id used by the database

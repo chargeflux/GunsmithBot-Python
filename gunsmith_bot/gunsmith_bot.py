@@ -8,7 +8,7 @@ import discord
 from discord.ext import commands, tasks
 import pydest
 import constants
-from armory import Armory, loader
+from armory import Armory, pydest_loader
 
 @dataclass
 class State():
@@ -42,8 +42,8 @@ class UpdateManifest(commands.Cog):
     @tasks.loop(hours=24)
     async def update_manifest(self):
         if current_state.destiny_api:
-            await loader.update_manifest(current_state.destiny_api)
-            manifest_location = await loader.get_manifest(current_state.destiny_api)
+            await pydest_loader.update_manifest(current_state.destiny_api)
+            manifest_location = await pydest_loader.get_manifest(current_state.destiny_api)
             if manifest_location != current_state.current_manifest:
                 old_manifests.append(current_state.current_manifest)
                 current_state.current_manifest = manifest_location
@@ -69,8 +69,8 @@ async def on_ready():
     logger.log(logging.INFO, f'We have logged in as {bot.user}')
     if not current_state.current_manifest:
         try:
-            current_state.destiny_api = await loader.initialize_destiny()
-            current_state.current_manifest = await loader.get_manifest(current_state.destiny_api)
+            current_state.destiny_api = await pydest_loader.initialize_destiny()
+            current_state.current_manifest = await pydest_loader.get_manifest(current_state.destiny_api)
         except pydest.PydestException:
             logger.critical("Failed to initialize PyDest. Quitting.")
             await bot.logout()
