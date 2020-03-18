@@ -2,7 +2,7 @@ import logging
 import os
 import asyncio
 import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from sqlite3 import OperationalError
 import discord
 from discord.ext import commands, tasks
@@ -14,7 +14,7 @@ from armory import Armory, loader
 class State():
     current_manifest: str = ''
     destiny_api: pydest = None
-    old_manifests: [str] = []
+    old_manifests: [str] = field(default_factory=list)
 
 current_state: State = State()
 
@@ -55,8 +55,9 @@ class UpdateManifest(commands.Cog):
         for old_manifest in current_state.old_manifests:
             try:
                 os.remove(old_manifest)
-            except OSError:
+            except OSError as ex:
                 logger.critical(f"Failed to remove old manifest: {old_manifest}")
+                logger.exception(ex)
         current_state.old_manifests = []
 
 @bot.event
@@ -87,10 +88,12 @@ async def gunsmith(ctx, *, arg):
     ----------
     ctx
         The context of the command being invoked. Constructed by `discord.py`
-    *args
+    arg
         The arguments of the command, after "!gunsmith"
     '''
     weapon = arg
+
+    logger.info(ctx.message.content)
 
     if not os.path.exists(current_state.current_manifest):
         logger.critical(f"Manifest queried does not exist at {current_state.current_manifest}")
@@ -98,9 +101,14 @@ async def gunsmith(ctx, *, arg):
         return
 
     armory = Armory(current_state.current_manifest)
+
+    logger.info(f"Searching for '{weapon}'")
     weapons = armory.get_weapon_details(weapon)
+
+    logger.info(f"# of weapons found: {len(weapons)}")
     result = weapons[0] # TODO: pagination
 
+    logger.info("Constructing weapon result")
     DESCRIPTION = str(result.weapon_base_info) + "\n" + result.description
     embed = discord.Embed(title=result.name, description= DESCRIPTION, color=constants.DISCORD_BG_HEX)
     embed.set_thumbnail(url=result.icon)
@@ -110,6 +118,8 @@ async def gunsmith(ctx, *, arg):
             embed.add_field(name="\u200b", value="\u200b", inline=True)
         embed.add_field(name=perk.name, value=perk, inline=True)
     embed.add_field(name="\u200b", value="\u200b", inline=True)
+
+    logger.info("Sending weapon result")
     await ctx.send(embed=embed)
 
 @gunsmith.error

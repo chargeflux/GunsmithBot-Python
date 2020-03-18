@@ -21,15 +21,13 @@ class Armory:
     '''
 
     def __init__(self, current_manifest_path):
+        logger.debug(f"Setting manifest path: {current_manifest_path}")
         self._current_manifest_path = current_manifest_path
-
-    def update_current_manifest_path(self, current_manifest):
-        self._current_manifest_path = current_manifest
     
     def get_current_manifest(self):
         return self._current_manifest_path
 
-    def __search_weapon(self, name):
+    def __search_weapon(self, search):
         '''
         Search for a Destiny 2 weapon in "DestinyInventoryItemDefinition" and extract JSON for all
         matches
@@ -48,7 +46,7 @@ class Armory:
             cursor = conn.cursor()
             cursor.execute('''
             SELECT item.id, json FROM DestinyInventoryItemDefinition as item 
-            WHERE json_extract(item.json, '$.displayProperties.name') LIKE ?''', (name + "%",))
+            WHERE json_extract(item.json, '$.displayProperties.name') LIKE ?''', (search + "%",))
 
             weapons = []
             for row in cursor:
@@ -75,9 +73,9 @@ class Armory:
         bool
             If the item found is a weapon
         '''
-        if 'sockets' not in raw_weapon_data.keys():
+        if constants.WeaponBase.WEAPON.value not in raw_weapon_data["itemCategoryHashes"]:
             return False
-        elif constants.WeaponBase.WEAPON.value not in raw_weapon_data["itemCategoryHashes"]:
+        if 'sockets' not in raw_weapon_data.keys():
             return False
         return True
 
@@ -96,8 +94,6 @@ class Armory:
         weapons : [Weapon]
             A list where each individual weapon is a `Weapon`
         '''
-
-        logger.info(f"Searching for '{name}'")
 
         weapon_results = self.__search_weapon(name)
 
@@ -118,7 +114,7 @@ class WeaponResult:
     Attributes
     ----------
     db_id: int
-        The database id of the weapon in Bungie's manifest
+        The database id of the weapon in Bungie's manifest in "DestinyInventoryItemDefinition"
     
     display_properties_data: dict
         Holds information about the name, description and image of the weapon
@@ -151,7 +147,7 @@ class Weapon:
     Attributes 
     ----------
     db_id : int
-        The database id of the weapon in Bungie's manifest
+        The database id of the weapon in Bungie's manifest in "DestinyInventoryItemDefinition"
     
     _current_manifest_path : str
         The path to Bungie's manifest of static definitions in Destiny 2
@@ -227,6 +223,7 @@ class Weapon:
         '''
 
         if 'reusablePlugSetHash' not in socket:
+            logger.error("reusablePlugSetHash not found in socket entry for intrinisic nature")
             return None
 
         reusablePlugSetHash = socket['reusablePlugSetHash']
@@ -305,6 +302,7 @@ class Weapon:
             elif 'reusablePlugSetHash' in socket:
                 plug_set_hash = socket['reusablePlugSetHash']
             else:
+                logger.error("randomizedPlugSetHash or reusablePlugSetHash not found in socket entry for weapon perks")
                 continue
                 
             converted_plug_set_hash = self.__convert_hash(plug_set_hash)
@@ -382,7 +380,6 @@ class Weapon:
         -------
         WeaponBaseArchetype
         '''
-
         weapon_base_info = WeaponBaseArchetype()
         for item_category_hash in item_categories_hash_data[1:]:
             try:
