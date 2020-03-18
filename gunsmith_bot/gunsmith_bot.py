@@ -1,17 +1,20 @@
 import logging
-import discord
-from discord.ext import commands
 import os
 import asyncio
+import datetime
 from dataclasses import dataclass
-import constants
+from sqlite3 import OperationalError
+import discord
+from discord.ext import commands, tasks
 import pydest
+import constants
 from armory import Armory, loader
 
 @dataclass
 class State():
     current_manifest: str = ''
-    destiny_api: object = None
+    destiny_api: pydest = None
+    old_manifests: [str] = []
 
 current_state: State = State()
 
@@ -27,6 +30,34 @@ if not (DISCORD_KEY := os.environ.get("DISCORD_KEY")):
     raise ValueError("Please set the environment variable for DISCORD_KEY")
 
 bot = commands.Bot(command_prefix="!", description='Retrieve rolls for Destiny 2 weapons')
+
+class UpdateManifest(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.update_manifest.start()
+
+    def cog_unload(self):
+        self.update_manifest.stop()
+
+    @tasks.loop(hours=24)
+    async def update_manifest(self):
+        if current_state.destiny_api:
+            await loader.update_manifest(current_state.destiny_api)
+            manifest_location = await loader.get_manifest(current_state.destiny_api)
+            if manifest_location != current_state.current_manifest:
+                old_manifests.append(current_state.current_manifest)
+                current_state.current_manifest = manifest_location
+                
+
+    @update_manifest.before_loop
+    async def before_update_manifest(self):
+        await self.bot.wait_until_ready()
+        for old_manifest in current_state.old_manifests:
+            try:
+                os.remove(old_manifest)
+            except OSError:
+                logger.critical(f"Failed to remove old manifest: {old_manifest}")
+        current_state.old_manifests = []
 
 @bot.event
 async def on_ready():
@@ -61,9 +92,14 @@ async def gunsmith(ctx, *, arg):
     '''
     weapon = arg
 
+    if not os.path.exists(current_state.current_manifest):
+        logger.critical(f"Manifest queried does not exist at {current_state.current_manifest}")
+        await ctx.send("An error occured. Please try again!")
+        return
+
     armory = Armory(current_state.current_manifest)
     weapons = armory.get_weapon_details(weapon)
-    result = weapons[0] #TODO: pagination
+    result = weapons[0] # TODO: pagination
 
     DESCRIPTION = str(result.weapon_base_info) + "\n" + result.description
     embed = discord.Embed(title=result.name, description= DESCRIPTION, color=constants.DISCORD_BG_HEX)
@@ -83,15 +119,25 @@ async def on_error(ctx, error):
         if isinstance(error.original, ValueError):
             logger.error(ctx.message.content)
             await ctx.send('Weapon could not be found.')
+            return
         if isinstance(error.original, TypeError):
             logger.error(ctx.message.content)
             logger.error('Failed to parse weapon')
-            await ctx.send('Failed to parse weapon. Please notify my creator.')
+            await ctx.send('Failed to parse weapon. Please try again.')
+            return
         if isinstance(error.original, discord.errors.HTTPException):
             if error.original.status == 429:
                 logger.critical("Bot is rate-limited")
+            return
+        if isinstance(error.original, OperationalError):
+            logger.error(ctx.message.content)
+            logger.error('Failed to find manifest')
+            await ctx.send('An error occured. Please try again.')
+            return
     if isinstance(error, commands.BadArgument):
         await ctx.send("Please enter the weapon name.")
+        return
 
 logger.info("Starting up bot")
+bot.add_cog(UpdateManifest(bot))
 bot.run(DISCORD_KEY)

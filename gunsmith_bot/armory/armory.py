@@ -8,10 +8,7 @@ from dataclasses import dataclass
 from typing import List
 from . import constants
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s', 
-                        datefmt='%Y-%m-%d %I:%M:%S %p')
 logger = logging.getLogger('Armory')
-logger.setLevel(logging.INFO)
 
 class Armory:
     '''
@@ -99,6 +96,8 @@ class Armory:
         weapons : [Weapon]
             A list where each individual weapon is a `Weapon`
         '''
+
+        logger.info(f"Searching for '{name}'")
 
         weapon_results = self.__search_weapon(name)
 
@@ -424,6 +423,9 @@ class WeaponBaseArchetype:
     
     weapon_type: constants.WeaponBase
         Determines if the weapon is a hand cannon, pulse rifle, sword, etc.
+
+    weapon_tier_type: constants.WeaponTierType
+        Determines the weapon's tier, e.g., legendary
     '''
     weapon_class: constants.WeaponBase = None
     weapon_type: constants.WeaponBase = None
@@ -448,3 +450,11 @@ class WeaponBaseArchetype:
                 str_to_construct = str_to_construct[2:-1]
             return '**' + str_to_construct.strip() + '**'
         return ''
+
+def setupLogger():
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s', 
+                        datefmt='%Y-%m-%d %I:%M:%S %p')
+    logger.setLevel(logging.INFO)
+
+if __name__ == "__main__":
+    setupLogger()

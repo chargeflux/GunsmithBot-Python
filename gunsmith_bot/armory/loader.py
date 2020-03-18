@@ -21,14 +21,12 @@ async def update_manifest(destiny):
     except pydest.PydestException:
         logger.error("Failed to update manifest")
 
-    return destiny
-
 async def initialize_destiny():
     destiny = pydest.Pydest(BUNGIE_KEY)
 
     await destiny.update_manifest()
 
-    logger.info("Initialized PyDest")
+    logger.info("Initialized Pydest")
 
     return destiny
 
