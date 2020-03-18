@@ -10,7 +10,10 @@ from dataclasses import dataclass
 from typing import List
 from . import constants
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s', 
+                        datefmt='%Y-%m-%d %I:%M:%S %p')
 logger = logging.getLogger('Armory')
+logger.setLevel(logging.INFO)
 
 class Armory:
     '''
@@ -18,16 +21,16 @@ class Armory:
 
     Attributes 
     ----------
-    _current_manifest_path : str
+    current_manifest_path : str
         The path to Bungie's manifest of static definitions in Destiny 2
     '''
 
     def __init__(self, current_manifest_path):
         logger.debug(f"Setting manifest path: {current_manifest_path}")
-        self._current_manifest_path = current_manifest_path
+        self.current_manifest_path = current_manifest_path
     
-    def get_current_manifest(self):
-        return self._current_manifest_path
+    def get_current_manifest_path(self):
+        return self.current_manifest_path
 
     def __search_weapon(self, query):
         '''
@@ -44,7 +47,7 @@ class Armory:
         weapons: [WeaponResult]
             The weapons found in the manifest where each is a `WeaponResult`
         '''
-        with sqlite3.connect(self._current_manifest_path) as conn:
+        with sqlite3.connect(self.current_manifest_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
             SELECT item.id, json FROM DestinyInventoryItemDefinition as item 
@@ -54,7 +57,7 @@ class Armory:
             for row in cursor:
                 raw_weapon_data = json.loads(row[1])
                 if self.__validate_weapon_search(raw_weapon_data):
-                    weapons.append(WeaponResult(row[0], raw_weapon_data))
+                    weapons.append(WeaponResult(row[0], query, raw_weapon_data, self.current_manifest_path))
 
             if not weapons:
                 raise ValueError
@@ -101,7 +104,7 @@ class Armory:
 
         weapons = []
         for weapon_result in weapon_results:
-            weapon = Weapon(weapon_result, query, self._current_manifest_path)
+            weapon = Weapon.from_weapon_result(weapon_result)
             if weapon.has_random_rolls:
                 weapons.insert(0, weapon)
             else:
@@ -118,6 +121,9 @@ class WeaponResult:
     ----------
     db_id: int
         The database id of the weapon in Bungie's manifest in "DestinyInventoryItemDefinition"
+
+    query: str
+        The name of the Destiny 2 weapon to search
     
     display_properties_data: dict
         Holds information about the name, description and image of the weapon
@@ -135,24 +141,28 @@ class WeaponResult:
         Determines the tier type of the wepaon
     '''
 
-    def __init__(self, db_id, raw_weapon_data):
+    def __init__(self, db_id, query, raw_weapon_data, current_manifest_path):
         self.db_id = db_id
+        self.query = query
         self.display_properties_data = raw_weapon_data["displayProperties"]
         self.socket_data = raw_weapon_data["sockets"]
         self.item_categories_hash_data = sorted(raw_weapon_data["itemCategoryHashes"])
         self.display_source_data = raw_weapon_data["displaySource"]
         self.tier_type_hash = raw_weapon_data["inventory"]["tierTypeHash"]
+        self.current_manifest_path = current_manifest_path
 
 class Weapon:
     '''
     Contains all the necessary information for a Destiny 2 weapon
+
+    Constructed via the `Weapon.from_weapon_result` class method
 
     Attributes 
     ----------
     db_id : int
         The database id of the weapon in Bungie's manifest in "DestinyInventoryItemDefinition"
     
-    _current_manifest_path : str
+    current_manifest_path : str
         The path to Bungie's manifest of static definitions in Destiny 2
     
     weapon_base_info: WeaponBaseArchetype
@@ -166,23 +176,26 @@ class Weapon:
     icon: str
         The relative url to the icon of the weapon at bungie.net
     
+    has_random_rolls: bool
+        If the weapon has random rolls or not
+    
+    similarity_score: float
+        The similarity score between the name of the weapon and query
+    
     intrinsic: WeaponPerkPlugInfo
         Represents the intrinsic nature of the weapon, e.g., adaptive frame
     
     weapon_perks: [WeaponPerkPlugInfo]
         Holds all the possible plugs for each perk if random rolled. Otherwise it will show
         the static roll
-    
-    has_random_rolls: bool
-        If the weapon has random rolls or not
-    
-    similarity_score: float
-        The similarity score between the name of the weapon and query
     '''
 
-    def __init__(self, weapon_result, query, current_manifest):
+    def __init__(self, weapon_result):
+        '''
+        This class should be constructed through the class method `Weapon.from_weapon_result` not __init__.
+        '''
         self.db_id = weapon_result.db_id
-        self._current_manifest_path = current_manifest
+        self.current_manifest_path = weapon_result.current_manifest_path
 
         self.weapon_base_info = self.__set_base_info(weapon_result.item_categories_hash_data, weapon_result.tier_type_hash)
         
@@ -195,9 +208,37 @@ class Weapon:
         else:
             self.has_random_rolls = False
 
-        self.intrinsic, self.weapon_perks = self.__process_socket_data(weapon_result.socket_data)
+        self.similarity_score = difflib.SequenceMatcher(None, self.name, weapon_result.query).ratio()
 
-        self.similarity_score = difflib.SequenceMatcher(None, self.name, query).ratio()
+        self._intrinsic = None
+        self._weapon_perks = None
+
+
+    @property
+    def intrinsic(self):
+        if not self._intrinsic:
+            raise AttributeError("Intrinsic data is missing. Please call `Weapon.from_weapon_result` first!")
+        return self._intrinsic
+    
+    @intrinsic.setter
+    def intrinsic(self, value):
+        self._intrinsic = value
+
+    @property
+    def weapon_perks(self):
+        if not self._weapon_perks:
+            raise AttributeError("Weapon perk data is missing. Please call `Weapon.from_weapon_result` first!")
+        return self._weapon_perks
+    
+    @weapon_perks.setter
+    def weapon_perks(self, value):
+        self._weapon_perks = value
+
+    @classmethod
+    def from_weapon_result(cls, weapon_result):
+        new_weapon = cls(weapon_result)
+        new_weapon.intrinsic, new_weapon.weapon_perks = new_weapon.__process_socket_data(weapon_result.socket_data)
+        return new_weapon
 
     def __convert_hash(self, val):
         '''
@@ -361,7 +402,7 @@ class Weapon:
         weapon_perks : [WeaponPerk]
             Returns a list of weapon perks where each is a `WeaponPerk`
         '''
-        with sqlite3.connect(self._current_manifest_path) as conn:
+        with sqlite3.connect(self.current_manifest_path) as conn:
             cursor = conn.cursor()
             for category_data in socket_data["socketCategories"]:
                 if category_data["socketCategoryHash"] == constants.SocketCategoryHash.INTRINSICS.value:
@@ -455,11 +496,3 @@ class WeaponBaseArchetype:
                 str_to_construct = str_to_construct[2:-1]
             return '**' + str_to_construct.strip() + '**'
         return ''
-
-def setupLogger():
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s', 
-                        datefmt='%Y-%m-%d %I:%M:%S %p')
-    logger.setLevel(logging.INFO)
-
-if __name__ == "__main__":
-    setupLogger()

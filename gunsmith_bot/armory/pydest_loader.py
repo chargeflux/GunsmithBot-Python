@@ -3,7 +3,10 @@ import pydest
 import os
 import asyncio
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s', 
+                        datefmt='%Y-%m-%d %I:%M:%S %p')
 logger = logging.getLogger('Loader')
+logger.setLevel(logging.INFO)
 
 if not (BUNGIE_KEY := os.environ.get("BUNGIE_KEY")):
     logger.error("Failed to retrieve BUNGIE_KEY")
@@ -29,11 +32,3 @@ async def initialize_destiny():
     logger.info("Initialized Pydest")
 
     return destiny
-
-def setupLogger():
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s', 
-                        datefmt='%Y-%m-%d %I:%M:%S %p')
-    logger.setLevel(logging.INFO)
-
-if __name__ == "__main__":
-    setupLogger()
