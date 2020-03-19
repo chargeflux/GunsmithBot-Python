@@ -34,7 +34,7 @@ class Armory:
     def get_current_manifest_path(self):
         return self.current_manifest_path
 
-    async def __search_weapon(self, query):
+    async def _search_weapon(self, query):
         '''
         Search for a Destiny 2 weapon in "DestinyInventoryItemDefinition" and extract JSON for all
         matches
@@ -58,7 +58,7 @@ class Armory:
             weapons = []
             async for row in cursor:
                 raw_weapon_data = json.loads(row[1])
-                if self.__validate_weapon_search(raw_weapon_data):
+                if self._validate_weapon_search(raw_weapon_data):
                     weapons.append(WeaponResult(row[0], query, raw_weapon_data, self.current_manifest_path))
 
             if not weapons:
@@ -66,7 +66,7 @@ class Armory:
             else:
                 return weapons
     
-    def __validate_weapon_search(self, raw_weapon_data):
+    def _validate_weapon_search(self, raw_weapon_data):
         '''
         Validate the JSON of weapon found from querying the manifest
 
@@ -102,7 +102,7 @@ class Armory:
             A list where each individual weapon is a `Weapon`
         '''
 
-        weapon_results = await self.__search_weapon(query)
+        weapon_results = await self._search_weapon(query)
 
         weapons = []
         for weapon_result in weapon_results:
@@ -199,7 +199,7 @@ class Weapon:
         self.db_id = weapon_result.db_id
         self.current_manifest_path = weapon_result.current_manifest_path
 
-        self.weapon_base_info = self.__set_base_info(weapon_result.item_categories_hash_data, weapon_result.tier_type_hash)
+        self.weapon_base_info = self._set_base_info(weapon_result.item_categories_hash_data, weapon_result.tier_type_hash)
         
         self.name = weapon_result.display_properties_data["name"]
         self.description = weapon_result.display_properties_data["description"]
@@ -239,10 +239,10 @@ class Weapon:
     @classmethod
     async def from_weapon_result(cls, weapon_result):
         new_weapon = cls(weapon_result)
-        new_weapon.intrinsic, new_weapon.weapon_perks = await new_weapon.__process_socket_data(weapon_result.socket_data)
+        new_weapon.intrinsic, new_weapon.weapon_perks = await new_weapon._process_socket_data(weapon_result.socket_data)
         return new_weapon
 
-    def __convert_hash(self, val):
+    def _convert_hash(self, val):
         '''
         Converts the item hash to the id used by the database
 
@@ -254,7 +254,7 @@ class Weapon:
             val = val - (1 << 32)
         return val
 
-    async def __process_socket_intrinsic(self, socket, cursor):
+    async def _process_socket_intrinsic(self, socket, cursor):
         '''
         Processes socket entry corresponding to information about the intrinsic nature of the weapon.
         This socket usually only has a "reusablePlugSetHash" field since intrinsic nature of 
@@ -278,7 +278,7 @@ class Weapon:
             return None
 
         reusablePlugSetHash = socket['reusablePlugSetHash']
-        converted_reusablePlugSetHash = self.__convert_hash(reusablePlugSetHash)
+        converted_reusablePlugSetHash = self._convert_hash(reusablePlugSetHash)
 
         await cursor.execute(
         '''
@@ -289,7 +289,7 @@ class Weapon:
 
         plug_hash = (await cursor.fetchone())[0]
         
-        converted_plug_hash = self.__convert_hash(plug_hash)
+        converted_plug_hash = self._convert_hash(plug_hash)
 
         await cursor.execute(
             '''
@@ -303,7 +303,7 @@ class Weapon:
                                   description = plug_info['description'],
                                   icon = plug_info['icon'])
 
-    async def __process_socket_data_perks(self, socket_entries, socket_indexes, cursor):
+    async def _process_socket_data_perks(self, socket_entries, socket_indexes, cursor):
         '''
         Processes socket entries corresponding to information about the perks of the weapon.
         Each socket usually has a "reusablePlugSetHash" field if it is a static-rolled weapon or
@@ -332,7 +332,7 @@ class Weapon:
         for order_idx, index in enumerate(socket_indexes):
             socket = socket_entries[index]
             socket_type_hash = socket['socketTypeHash']
-            converted_socket_type_hash = self.__convert_hash(socket_type_hash)
+            converted_socket_type_hash = self._convert_hash(socket_type_hash)
                 
             # Assume plugWhitelist always has a len of 1
             await cursor.execute(
@@ -356,7 +356,7 @@ class Weapon:
                 logger.error("randomizedPlugSetHash or reusablePlugSetHash not found in socket entry for weapon perks")
                 continue
                 
-            converted_plug_set_hash = self.__convert_hash(plug_set_hash)
+            converted_plug_set_hash = self._convert_hash(plug_set_hash)
 
             await cursor.execute(
             '''
@@ -368,7 +368,7 @@ class Weapon:
             converted_plug_id_results = []
 
             async for row in cursor:
-                converted_plug_id_results.append(self.__convert_hash(row[0]))
+                converted_plug_id_results.append(self._convert_hash(row[0]))
 
             # SQL does not support binding to a list. Therefore we can dynamically insert question marks
             # based on the length of the converted_plug_id_results. Additionally, since we are only inserting 
@@ -390,7 +390,7 @@ class Weapon:
         return weapon_perks
 
 
-    async def __process_socket_data(self, socket_data):
+    async def _process_socket_data(self, socket_data):
         '''
         Processes socket data for information about the intrinsic nature and perks
         for the weapon.
@@ -413,15 +413,15 @@ class Weapon:
                 if category_data["socketCategoryHash"] == constants.SocketCategoryHash.INTRINSICS.value:
                         index = category_data['socketIndexes'][0] # assume only one intrinsic
                         socket = socket_data["socketEntries"][index]
-                        intrinsic = await self.__process_socket_intrinsic(socket, cursor)
+                        intrinsic = await self._process_socket_intrinsic(socket, cursor)
                 if category_data["socketCategoryHash"] == constants.SocketCategoryHash.WEAPON_PERKS.value:
-                    weapon_perks = await self.__process_socket_data_perks(socket_data["socketEntries"], 
+                    weapon_perks = await self._process_socket_data_perks(socket_data["socketEntries"], 
                                                                     category_data['socketIndexes'], 
                                                                     cursor)
         return intrinsic, weapon_perks
 
 
-    def __set_base_info(self, item_categories_hash_data, tier_type_hash):
+    def _set_base_info(self, item_categories_hash_data, tier_type_hash):
         '''
         Sets the base archetype information for the weapon 
 
