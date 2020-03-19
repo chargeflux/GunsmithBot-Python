@@ -1,4 +1,5 @@
 import logging
+from logging.handlers import TimedRotatingFileHandler
 import os
 import asyncio
 import datetime
@@ -10,18 +11,19 @@ import pydest
 import constants
 from armory import Armory, pydest_loader
 
-@dataclass
-class State():
-    current_manifest: str = ''
-    destiny_api: pydest = None
-    old_manifests: [str] = field(default_factory=list)
+if not os.path.exists("logs/"):
+    os.mkdir("logs")
 
-current_state: State = State()
+logfmt = logging.Formatter(fmt='%(asctime)s [%(levelname)s] %(name)s: %(message)s', 
+                           datefmt='%Y-%m-%d %I:%M:%S %p')
+handler = TimedRotatingFileHandler("logs/gunsmith.log", 
+                                   when="D", 
+                                   interval=1,
+                                   backupCount=5)
+handler.setFormatter(logfmt)
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s', 
-                    datefmt='%Y-%m-%d %I:%M:%S %p')
-logger = logging.getLogger('Gunsmith')  
-logger.setLevel(logging.INFO)
+logger = logging.getLogger('Gunsmith')
+logging.basicConfig(level=logging.INFO, handlers=[handler])
 
 logging.getLogger("discord").setLevel("WARNING")
 
@@ -29,7 +31,14 @@ if not (DISCORD_KEY := os.environ.get("DISCORD_KEY")):
     logger.error("Failed to retrieve DISCORD_KEY")
     raise ValueError("Please set the environment variable for DISCORD_KEY")
 
+@dataclass
+class State():
+    current_manifest: str = ''
+    destiny_api: pydest = None
+    old_manifests: [str] = field(default_factory=list)
+
 bot = commands.Bot(command_prefix="!", description='Retrieve rolls for Destiny 2 weapons')
+current_state: State = State()
 
 class UpdateManifest(commands.Cog):
     def __init__(self, bot):
@@ -41,24 +50,25 @@ class UpdateManifest(commands.Cog):
 
     @tasks.loop(hours=24)
     async def update_manifest(self):
-        if current_state.destiny_api:
-            await pydest_loader.update_manifest(current_state.destiny_api)
-            manifest_location = await pydest_loader.get_manifest(current_state.destiny_api)
-            if manifest_location != current_state.current_manifest:
-                old_manifests.append(current_state.current_manifest)
-                current_state.current_manifest = manifest_location
-                
-
-    @update_manifest.before_loop
-    async def before_update_manifest(self):
-        await self.bot.wait_until_ready()
         for old_manifest in current_state.old_manifests:
             try:
                 os.remove(old_manifest)
             except OSError as ex:
                 logger.critical(f"Failed to remove old manifest: {old_manifest}")
                 logger.exception(ex)
-        current_state.old_manifests = []
+        current_state.old_manifests = [] # note: clears even if deletion is unsucessful
+
+        if current_state.destiny_api:
+            await pydest_loader.update_manifest(current_state.destiny_api)
+            manifest_location = await pydest_loader.get_manifest(current_state.destiny_api)
+            if manifest_location != current_state.current_manifest:
+                current_state.old_manifests.append(current_state.current_manifest)
+                current_state.current_manifest = manifest_location
+                
+
+    @update_manifest.before_loop
+    async def before_update_manifest(self):
+        await self.bot.wait_until_ready()
 
 @bot.event
 async def on_ready():
@@ -66,7 +76,7 @@ async def on_ready():
     Triggered when the bot successfully logs into Discord and is ready. Note that this is not limited to
     the start up of the bot.
     """
-    logger.log(logging.INFO, f'We have logged in as {bot.user}')
+    logger.info(f'We have logged in as {bot.user}')
     if not current_state.current_manifest:
         try:
             current_state.destiny_api = await pydest_loader.initialize_destiny()
@@ -151,3 +161,4 @@ async def on_error(ctx, error):
 logger.info("Starting up bot")
 bot.add_cog(UpdateManifest(bot))
 bot.run(DISCORD_KEY)
+logger.info("Shutting down bot")
