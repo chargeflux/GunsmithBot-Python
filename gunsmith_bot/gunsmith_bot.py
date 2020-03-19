@@ -103,7 +103,7 @@ async def gunsmith(ctx, *, arg):
     armory = Armory(current_state.current_manifest)
 
     logger.info(f"Searching for '{weapon}'")
-    weapons = armory.get_weapon_details(weapon)
+    weapons = await armory.get_weapon_details(weapon)
 
     logger.info(f"# of weapons found: {len(weapons)}")
     result = weapons[0] # TODO: pagination

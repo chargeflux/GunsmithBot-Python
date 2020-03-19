@@ -1,4 +1,3 @@
-import sqlite3
 import os
 import glob
 import json
@@ -8,12 +7,15 @@ from operator import attrgetter
 import difflib
 from dataclasses import dataclass
 from typing import List
+import aiosqlite
 from . import constants
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s', 
                         datefmt='%Y-%m-%d %I:%M:%S %p')
 logger = logging.getLogger('Armory')
 logger.setLevel(logging.INFO)
+
+logging.getLogger("aiosqlite").setLevel("WARNING")
 
 class Armory:
     '''
@@ -32,7 +34,7 @@ class Armory:
     def get_current_manifest_path(self):
         return self.current_manifest_path
 
-    def __search_weapon(self, query):
+    async def __search_weapon(self, query):
         '''
         Search for a Destiny 2 weapon in "DestinyInventoryItemDefinition" and extract JSON for all
         matches
@@ -47,14 +49,14 @@ class Armory:
         weapons: [WeaponResult]
             The weapons found in the manifest where each is a `WeaponResult`
         '''
-        with sqlite3.connect(self.current_manifest_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
+        async with aiosqlite.connect(self.current_manifest_path) as conn:
+            cursor = await conn.cursor()
+            await cursor.execute('''
             SELECT item.id, json FROM DestinyInventoryItemDefinition as item 
             WHERE json_extract(item.json, '$.displayProperties.name') LIKE ?''', ("%" + query + "%",))
 
             weapons = []
-            for row in cursor:
+            async for row in cursor:
                 raw_weapon_data = json.loads(row[1])
                 if self.__validate_weapon_search(raw_weapon_data):
                     weapons.append(WeaponResult(row[0], query, raw_weapon_data, self.current_manifest_path))
@@ -85,7 +87,7 @@ class Armory:
         return True
 
 
-    def get_weapon_details(self, query):
+    async def get_weapon_details(self, query):
         '''
         Search and retrieve information about a Destiny 2 weapon from Bungie's manifest
 
@@ -100,11 +102,11 @@ class Armory:
             A list where each individual weapon is a `Weapon`
         '''
 
-        weapon_results = self.__search_weapon(query)
+        weapon_results = await self.__search_weapon(query)
 
         weapons = []
         for weapon_result in weapon_results:
-            weapon = Weapon.from_weapon_result(weapon_result)
+            weapon = await Weapon.from_weapon_result(weapon_result)
             if weapon.has_random_rolls:
                 weapons.insert(0, weapon)
             else:
@@ -235,9 +237,9 @@ class Weapon:
         self._weapon_perks = value
 
     @classmethod
-    def from_weapon_result(cls, weapon_result):
+    async def from_weapon_result(cls, weapon_result):
         new_weapon = cls(weapon_result)
-        new_weapon.intrinsic, new_weapon.weapon_perks = new_weapon.__process_socket_data(weapon_result.socket_data)
+        new_weapon.intrinsic, new_weapon.weapon_perks = await new_weapon.__process_socket_data(weapon_result.socket_data)
         return new_weapon
 
     def __convert_hash(self, val):
@@ -252,7 +254,7 @@ class Weapon:
             val = val - (1 << 32)
         return val
 
-    def __process_socket_intrinsic(self, socket, cursor):
+    async def __process_socket_intrinsic(self, socket, cursor):
         '''
         Processes socket entry corresponding to information about the intrinsic nature of the weapon.
         This socket usually only has a "reusablePlugSetHash" field since intrinsic nature of 
@@ -263,8 +265,8 @@ class Weapon:
         ----------
         socket : dict
             The socket entry corresponding to the intrinsic nature of the weapon
-        cursor : sqlite3.Cursor
-            Necessary to query SQLite3 DB
+        cursor : Cursor
+            Necessary to query SQLite DB asynchronously via aiosqlite 
 
         Returns
         -------
@@ -278,30 +280,30 @@ class Weapon:
         reusablePlugSetHash = socket['reusablePlugSetHash']
         converted_reusablePlugSetHash = self.__convert_hash(reusablePlugSetHash)
 
-        cursor.execute(
+        await cursor.execute(
         '''
         SELECT json_extract(j.value, '$.plugItemHash') 
         FROM DestinyPlugSetDefinition as item, 
         json_each(item.json, '$.reusablePlugItems') as j
         WHERE item.id = ?''', (converted_reusablePlugSetHash,))
 
-        plug_hash = cursor.fetchone()[0]
+        plug_hash = (await cursor.fetchone())[0]
         
         converted_plug_hash = self.__convert_hash(plug_hash)
 
-        cursor.execute(
+        await cursor.execute(
             '''
             SELECT json_extract(item.json, "$.displayProperties") 
             FROM DestinyInventoryItemDefinition as item 
             WHERE item.id = ?''', (converted_plug_hash,))
         
-        plug_info = json.loads(cursor.fetchone()[0])
+        plug_info = json.loads((await cursor.fetchone())[0])
 
         return WeaponPerkPlugInfo(name = plug_info['name'], 
                                   description = plug_info['description'],
                                   icon = plug_info['icon'])
 
-    def __process_socket_data_perks(self, socket_entries, socket_indexes, cursor):
+    async def __process_socket_data_perks(self, socket_entries, socket_indexes, cursor):
         '''
         Processes socket entries corresponding to information about the perks of the weapon.
         Each socket usually has a "reusablePlugSetHash" field if it is a static-rolled weapon or
@@ -318,8 +320,8 @@ class Weapon:
         socket_indexes : dict
             The indexes corresponding to weapon perks
         
-        cursor : sqlite3.Cursor
-            Necessary to query SQLite3 DB
+        cursor : Cursor
+            Necessary to query SQLite DB asynchronously via aiosqlite
 
         Returns
         -------
@@ -333,13 +335,13 @@ class Weapon:
             converted_socket_type_hash = self.__convert_hash(socket_type_hash)
                 
             # Assume plugWhitelist always has a len of 1
-            cursor.execute(
+            await cursor.execute(
             '''
             SELECT json_extract(item.json, "$.plugWhitelist[0]") 
             FROM DestinySocketTypeDefinition as item 
             WHERE item.id = ?''', (converted_socket_type_hash,))
         
-            plug_category_info = json.loads(cursor.fetchone()[0])
+            plug_category_info = json.loads((await cursor.fetchone())[0])
 
             try:
                 plug_category = constants.PlugCategoryHash(plug_category_info["categoryHash"])
@@ -356,26 +358,29 @@ class Weapon:
                 
             converted_plug_set_hash = self.__convert_hash(plug_set_hash)
 
-            cursor.execute(
+            await cursor.execute(
             '''
             SELECT json_extract(j.value, '$.plugItemHash') 
             FROM DestinyPlugSetDefinition as item, 
             json_each(item.json, '$.reusablePlugItems') as j
             WHERE item.id = ?''', (converted_plug_set_hash,))
 
-            converted_plug_id_results = list(map(self.__convert_hash,itertools.chain.from_iterable(cursor)))
+            converted_plug_id_results = []
+
+            async for row in cursor:
+                converted_plug_id_results.append(self.__convert_hash(row[0]))
 
             # SQL does not support binding to a list. Therefore we can dynamically insert question marks
             # based on the length of the converted_plug_id_results. Additionally, since we are only inserting 
             # question marks, we are not exposing ourselves to a security risk
-            cursor.execute(
+            await cursor.execute(
                 f'''
                 SELECT json_extract(item.json, "$.displayProperties") 
                 FROM DestinyInventoryItemDefinition as item
                 WHERE item.id in ({",".join(["?"]*len(converted_plug_id_results))})''', converted_plug_id_results)
             
             plugs = []
-            for plug in cursor:
+            async for plug in cursor:
                 plug_info = json.loads(plug[0])
                 plugs.append(WeaponPerkPlugInfo(name = plug_info['name'], 
                                                 description = plug_info['description'],
@@ -385,7 +390,7 @@ class Weapon:
         return weapon_perks
 
 
-    def __process_socket_data(self, socket_data):
+    async def __process_socket_data(self, socket_data):
         '''
         Processes socket data for information about the intrinsic nature and perks
         for the weapon.
@@ -402,15 +407,15 @@ class Weapon:
         weapon_perks : [WeaponPerk]
             Returns a list of weapon perks where each is a `WeaponPerk`
         '''
-        with sqlite3.connect(self.current_manifest_path) as conn:
-            cursor = conn.cursor()
+        async with aiosqlite.connect(self.current_manifest_path) as conn:
+            cursor = await conn.cursor()
             for category_data in socket_data["socketCategories"]:
                 if category_data["socketCategoryHash"] == constants.SocketCategoryHash.INTRINSICS.value:
                         index = category_data['socketIndexes'][0] # assume only one intrinsic
                         socket = socket_data["socketEntries"][index]
-                        intrinsic = self.__process_socket_intrinsic(socket, cursor)
+                        intrinsic = await self.__process_socket_intrinsic(socket, cursor)
                 if category_data["socketCategoryHash"] == constants.SocketCategoryHash.WEAPON_PERKS.value:
-                    weapon_perks = self.__process_socket_data_perks(socket_data["socketEntries"], 
+                    weapon_perks = await self.__process_socket_data_perks(socket_data["socketEntries"], 
                                                                     category_data['socketIndexes'], 
                                                                     cursor)
         return intrinsic, weapon_perks
