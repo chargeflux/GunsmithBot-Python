@@ -77,7 +77,7 @@ class Armory:
         bool
             If the item found is a weapon
         '''
-        if constants.WeaponBase.WEAPON.value not in raw_weapon_data["itemCategoryHashes"]:
+        if constants.WeaponBase.WEAPON.value not in raw_weapon_data.get("itemCategoryHashes", []):
             return False
         if constants.WeaponBase.DUMMY.value in raw_weapon_data["itemCategoryHashes"]:
             return False

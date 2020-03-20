@@ -105,6 +105,9 @@ async def gunsmith(ctx, *, arg):
 
     logger.info(ctx.message.content)
 
+    if len(weapon) < 3:
+        await ctx.send("Please enter a query of 3 or more characters!")
+
     if not os.path.exists(current_state.current_manifest):
         logger.critical(f"Manifest queried does not exist at {current_state.current_manifest}")
         await ctx.send("An error occured. Please try again!")
@@ -137,11 +140,11 @@ async def on_error(ctx, error):
     if hasattr(error, 'original'):
         logger.exception(error.original)
         if isinstance(error.original, ValueError):
-            logger.error(ctx.message.content)
+            logger.error(f"Command: {ctx.message.content}")
             await ctx.send('Weapon could not be found.')
             return
         if isinstance(error.original, TypeError):
-            logger.error(ctx.message.content)
+            logger.error(f"Command: {ctx.message.content}")
             logger.error('Failed to parse weapon')
             await ctx.send('Failed to parse weapon. Please try again.')
             return
@@ -150,11 +153,14 @@ async def on_error(ctx, error):
                 logger.critical("Bot is rate-limited")
             return
         if isinstance(error.original, OperationalError):
-            logger.error(ctx.message.content)
+            logger.error(f"Command: {ctx.message.content}")
             logger.error('Failed to find manifest')
             await ctx.send('An error occured. Please try again.')
             return
     if isinstance(error, commands.BadArgument):
+        await ctx.send("Please enter the weapon name.")
+        return
+    if isinstance(error, commands.MissingRequiredArgument):
         await ctx.send("Please enter the weapon name.")
         return
 
