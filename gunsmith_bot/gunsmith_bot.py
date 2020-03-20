@@ -50,7 +50,8 @@ class UpdateManifest(commands.Cog):
     async def update_manifest(self):
         for old_manifest in bot.current_state.old_manifests:
             try:
-                os.remove(old_manifest)
+                os.remove("./" + old_manifest)
+                logger.info(f"{old_manifest} was deleted")
             except OSError as ex:
                 logger.critical(f"Failed to remove old manifest: {old_manifest}")
                 logger.exception(ex)
@@ -60,6 +61,7 @@ class UpdateManifest(commands.Cog):
             await pydest_loader.update_manifest(bot.current_state.destiny_api)
             manifest_location = await pydest_loader.get_manifest(bot.current_state.destiny_api)
             if manifest_location != bot.current_state.current_manifest:
+                logger.info(f"The manifest was updated. Adding {old_manifest} for deletion")
                 bot.current_state.old_manifests.append(bot.current_state.current_manifest)
                 bot.current_state.current_manifest = manifest_location
 
