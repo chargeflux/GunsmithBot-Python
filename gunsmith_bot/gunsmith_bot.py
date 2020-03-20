@@ -35,7 +35,14 @@ class State():
     destiny_api: pydest = None
     old_manifests: [str] = field(default_factory=list)
 
-bot = commands.Bot(command_prefix="!", description='Retrieve rolls for Destiny 2 weapons')
+class CustomDefaultHelpCommand(commands.DefaultHelpCommand):
+    def __init__(self):
+        super().__init__(no_category="Misc")
+        self.command_attrs['name'] = "gunsmith -help"
+
+bot = commands.Bot(command_prefix="!", 
+                   help_command=CustomDefaultHelpCommand(), 
+                   description='Retrieve rolls for Destiny 2 weapons')
 bot.current_state: State = State()
 
 class UpdateManifest(commands.Cog):
@@ -90,6 +97,7 @@ async def on_ready():
 
 logger.info("Starting up bot")
 bot.add_cog(UpdateManifest(bot))
+bot.remove_command('help')
 bot.load_extension("cogs.weapons")
 bot.run(DISCORD_KEY)
 logger.info("Shutting down bot")

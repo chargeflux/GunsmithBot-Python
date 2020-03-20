@@ -73,6 +73,15 @@ class Weapons(commands.Cog):
         await ctx.send("Not implemented yet!")
         return
 
+    @gunsmith.command(name="-help",
+                      hidden=True)
+    async def help(self, ctx, *args):
+        if not args:
+            await ctx.send_help(*args)
+        else:
+            await ctx.send_help(' '.join(args))
+        return
+
     @gunsmith.error
     @perk.error
     async def on_error(self, ctx, error):
