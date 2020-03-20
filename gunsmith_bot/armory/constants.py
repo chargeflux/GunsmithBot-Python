@@ -53,6 +53,7 @@ class WeaponBase(Enum):
     TRACE_RIFLE = 2489664120
     BOW = 3317538576
     SUBMACHINE_GUN = 3954685534
+    DUMMY = 3109687656
 
 class WeaponTierType(Enum):
     BASIC = 3340296461

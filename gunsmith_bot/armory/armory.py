@@ -79,6 +79,8 @@ class Armory:
         '''
         if constants.WeaponBase.WEAPON.value not in raw_weapon_data["itemCategoryHashes"]:
             return False
+        if constants.WeaponBase.DUMMY.value in raw_weapon_data["itemCategoryHashes"]:
+            return False
         if 'sockets' not in raw_weapon_data.keys():
             return False
         return True
@@ -404,6 +406,8 @@ class Weapon:
         weapon_perks : [WeaponPerk]
             Returns a list of weapon perks where each is a `WeaponPerk`
         '''
+        intrinsic = None
+        weapon_perks = []
         async with aiosqlite.connect(self.current_manifest_path) as conn:
             cursor = await conn.cursor()
             for category_data in socket_data["socketCategories"]:
