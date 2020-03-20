@@ -107,6 +107,7 @@ async def gunsmith(ctx, *, arg):
 
     if len(weapon) < 3:
         await ctx.send("Please enter a query of 3 or more characters!")
+        return
 
     if not os.path.exists(current_state.current_manifest):
         logger.critical(f"Manifest queried does not exist at {current_state.current_manifest}")
