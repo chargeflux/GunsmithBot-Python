@@ -39,6 +39,11 @@ class CustomDefaultHelpCommand(commands.DefaultHelpCommand):
     def __init__(self):
         super().__init__(no_category="Misc")
         self.command_attrs['name'] = "gunsmith -help"
+    
+    def get_ending_note(self):
+        command_name = self.command_attrs['name']
+        return "Type {0}{1} command for more info on a command.\n" \
+               "You can also type {0}{1} category for more info on a category.".format(self.clean_prefix, command_name)
 
 bot = commands.Bot(command_prefix="!", 
                    help_command=CustomDefaultHelpCommand(), 
@@ -97,7 +102,6 @@ async def on_ready():
 
 logger.info("Starting up bot")
 bot.add_cog(UpdateManifest(bot))
-bot.remove_command('help')
 bot.load_extension("cogs.weapons")
 bot.run(DISCORD_KEY)
 logger.info("Shutting down bot")
