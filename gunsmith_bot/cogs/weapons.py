@@ -51,7 +51,7 @@ class Weapons(commands.Cog):
         result = weapons[0] # TODO: pagination
 
         logger.info("Constructing weapon result")
-        DESCRIPTION = str(result.weapon_base_info) + "\n" + result.description
+        DESCRIPTION = str(result.weapon_base_info) + "\n**" + result.intrinsic.name  + "**\n" + result.description
         embed = discord.Embed(title=result.name, description= DESCRIPTION, color=constants.DISCORD_BG_HEX)
         embed.set_thumbnail(url=result.icon)
 
@@ -70,7 +70,31 @@ class Weapons(commands.Cog):
                       usage="<perk>",
                       help="")
     async def perk(self, ctx, *, arg):
-        await ctx.send("Not implemented yet!")
+        perk = arg
+
+        logger.info(ctx.message.content)
+
+        if len(perk) < 3:
+            await ctx.send("Please enter a query of 3 or more characters!")
+            return
+
+        if not os.path.exists(self.bot.current_state.current_manifest):
+            logger.critical(f"Manifest queried does not exist at {self.bot.current_state.current_manifest}")
+            await ctx.send("An error occured. Please try again!")
+            return
+
+        armory = Armory(self.bot.current_state.current_manifest)
+
+        logger.info(f"Searching for '{perk}'")
+        perk_result = await armory.get_perk_details(perk)
+
+        logger.info("Constructing perk result")
+        DESCRIPTION = "**" + perk_result.name + "**\n" + perk_result.description
+        embed = discord.Embed(title=perk_result.category, description=DESCRIPTION, color=constants.DISCORD_BG_HEX)
+        embed.set_thumbnail(url=perk_result.icon)
+
+        logger.info("Sending perk result")
+        await ctx.send(embed=embed)
         return
 
     @gunsmith.command(name="-help",
@@ -85,7 +109,7 @@ class Weapons(commands.Cog):
     @gunsmith.error
     @perk.error
     async def on_error(self, ctx, error):
-        if ctx.invoked_subcommand == "-perk":
+        if ctx.invoked_with == "-perk":
             command_type = "perk"
         else:
             command_type = "weapon"

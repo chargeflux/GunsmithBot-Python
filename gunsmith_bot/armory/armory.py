@@ -31,6 +31,63 @@ class Armory:
     def get_current_manifest_path(self):
         return self.current_manifest_path
 
+    async def _search_perk(self, query):
+        '''
+        Search for a Destiny 2 perk in "DestinyInventoryItemDefinition" and extract JSON for all
+        matches
+
+        Parameters
+        ----------
+        query: str
+            The name of the Destiny 2 perk to search
+
+        Returns
+        -------
+        weapon_perk: WeaponPerkPlugInfo
+            The perk found in the manifest
+        '''
+        async with aiosqlite.connect(self.current_manifest_path) as conn:
+            cursor = await conn.cursor()
+            await cursor.execute('''
+            SELECT json FROM DestinyInventoryItemDefinition as item 
+            WHERE json_extract(item.json, '$.displayProperties.name') LIKE ?''', ("%" + query + "%",))
+
+            weapon_perk = None
+
+            async for row in cursor:
+                raw_perk_data = json.loads(row[0])
+                if "plug" in raw_perk_data:
+                    try:
+                        plug_category = constants.PlugCategoryHash(raw_perk_data["plug"]["plugCategoryHash"])
+                        weapon_perk = WeaponPerkPlugInfo.from_raw_perk_data(raw_perk_data, plug_category)
+                        break
+                    except ValueError:
+                        continue
+
+            if not weapon_perk:
+                raise ValueError
+            else:
+                return weapon_perk
+    
+    async def get_perk_details(self, query):
+        '''
+        Search and retrieve information about a Destiny 2 perk from Bungie's manifest
+
+        Parameters
+        ----------
+        query: str
+            The name of the Destiny 2 perk to search
+
+        Returns
+        -------
+        perk : WeaponPerk
+            The perk found in the manifest
+        '''
+
+        perk_result = await self._search_perk(query)
+
+        return perk_result
+
     async def _search_weapon(self, query):
         '''
         Search for a Destiny 2 weapon in "DestinyInventoryItemDefinition" and extract JSON for all
@@ -300,7 +357,8 @@ class Weapon:
 
         return WeaponPerkPlugInfo(name = plug_info['name'], 
                                   description = plug_info['description'],
-                                  icon = plug_info['icon'])
+                                  icon = plug_info['icon'],
+                                  category = constants.PlugCategoryHash.INTRINSICS)
 
     async def _process_socket_data_perks(self, socket_entries, socket_indexes, cursor):
         '''
@@ -383,7 +441,8 @@ class Weapon:
                 plug_info = json.loads(plug[0])
                 plugs.append(WeaponPerkPlugInfo(name = plug_info['name'], 
                                                 description = plug_info['description'],
-                                                icon = plug_info['icon']))
+                                                icon = plug_info['icon'],
+                                                category = plug_category))
 
             weapon_perks.append(WeaponPerk(idx = order_idx, name = plug_category.name.title(), plugs = plugs))
         return weapon_perks
@@ -454,6 +513,15 @@ class WeaponPerkPlugInfo:
     name: str
     description: str
     icon: str
+    category: str
+
+    @classmethod
+    def from_raw_perk_data(cls, raw_perk_data, plug_category: constants.PlugCategoryHash):
+        perk_details = raw_perk_data["displayProperties"]
+        name = perk_details["name"]
+        description = perk_details["description"]
+        icon = constants.BUNGIE_URL_ROOT + perk_details["icon"]
+        return cls(name, description, icon, plug_category.name.title())
 
     def __str__(self):
         return self.name
