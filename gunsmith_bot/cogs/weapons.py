@@ -70,6 +70,16 @@ class Weapons(commands.Cog):
                       usage="<perk>",
                       help="")
     async def perk(self, ctx, *, arg):
+        '''
+        This function corresponds to the "!gunsmith -perk <perk>" command.
+
+        Parameters
+        ----------
+        ctx
+            The context of the command being invoked. Constructed by `discord.py`
+        arg
+            The arguments of the command, after "!gunsmith -perk"
+        '''
         perk = arg
 
         logger.info(ctx.message.content)
@@ -100,6 +110,16 @@ class Weapons(commands.Cog):
     @gunsmith.command(name="-help",
                       hidden=True)
     async def help(self, ctx, *args):
+        '''
+        This function corresponds to the "!gunsmith -help" command.
+
+        Parameters
+        ----------
+        ctx
+            The context of the command being invoked. Constructed by `discord.py`
+        *args
+            The arguments of the command as a tuple separated by whitespace, after "!gunsmith -help"
+        '''
         if not args:
             await ctx.send_help(*args)
         else:

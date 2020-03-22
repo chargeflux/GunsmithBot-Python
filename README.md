@@ -28,7 +28,7 @@ Please make sure to update tests as appropriate.
 [Destiny 2 API Info - vpzed](https://github.com/vpzed/Destiny2-API-Info/wiki/)
 - An excellent guide to understanding Bungie's API and navigating the manifest SQLite database
   
-[Bungie.net API](https://github.com/Bungie-net/api/wiki/)
+[Bungie.net API Wiki](https://github.com/Bungie-net/api/wiki/)
 
 ## License
 

@@ -90,8 +90,7 @@ class Armory:
 
     async def _search_weapon(self, query):
         '''
-        Search for a Destiny 2 weapon in "DestinyInventoryItemDefinition" and extract JSON for all
-        matches
+        Search for a Destiny 2 weapon in "DestinyInventoryItemDefinition" and extract JSON for all matches
 
         Parameters
         ----------
@@ -126,7 +125,7 @@ class Armory:
 
         Parameters
         ----------
-        raw_weapon_data: dict()
+        raw_weapon_data: dict
             Derived from json data for the weapon
 
         Returns
@@ -196,7 +195,10 @@ class WeaponResult:
         Determines if it has random rolls or not
     
     tierTypeHash : dict
-        Determines the tier type of the wepaon
+        Determines the tier type of the weapon
+
+    current_manifest_path : str
+        The path to Bungie's manifest of static definitions in Destiny 2
     '''
 
     def __init__(self, db_id, query, raw_weapon_data, current_manifest_path):
