@@ -20,14 +20,14 @@ class Weapons(commands.Cog):
             help="")
     async def gunsmith(self, ctx, *, arg):
         '''
-        This function corresponds to the "!gunsmith <weapon>" command.
+        This function corresponds to the "?gunsmith <weapon>" command.
 
         Parameters
         ----------
         ctx
             The context of the command being invoked. Constructed by `discord.py`
         arg
-            The arguments of the command, after "!gunsmith"
+            The arguments of the command, after "?gunsmith"
         '''
         weapon = arg
 
@@ -71,14 +71,14 @@ class Weapons(commands.Cog):
                       help="")
     async def perk(self, ctx, *, arg):
         '''
-        This function corresponds to the "!gunsmith -perk <perk>" command.
+        This function corresponds to the "?gunsmith -perk <perk>" command.
 
         Parameters
         ----------
         ctx
             The context of the command being invoked. Constructed by `discord.py`
         arg
-            The arguments of the command, after "!gunsmith -perk"
+            The arguments of the command, after "?gunsmith -perk"
         '''
         perk = arg
 
@@ -111,14 +111,14 @@ class Weapons(commands.Cog):
                       hidden=True)
     async def help(self, ctx, *args):
         '''
-        This function corresponds to the "!gunsmith -help" command.
+        This function corresponds to the "?gunsmith -help" command.
 
         Parameters
         ----------
         ctx
             The context of the command being invoked. Constructed by `discord.py`
         *args
-            The arguments of the command as a tuple separated by whitespace, after "!gunsmith -help"
+            The arguments of the command as a tuple separated by whitespace, after "?gunsmith -help"
         '''
         if not args:
             await ctx.send_help(*args)
@@ -157,7 +157,7 @@ class Weapons(commands.Cog):
             await ctx.send(f"Please enter the {command_type} name.")
             return
         if isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send(f"Please enter the {command_type} name. Run '!gunsmith -help' for more information.")
+            await ctx.send(f"Please enter the {command_type} name. Run '?gunsmith -help' for more information.")
             return
 
 def setup(bot):

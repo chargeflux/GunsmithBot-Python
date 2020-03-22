@@ -45,7 +45,7 @@ class CustomDefaultHelpCommand(commands.DefaultHelpCommand):
         return "Type {0}{1} command for more info on a command.\n" \
                "You can also type {0}{1} category for more info on a category.".format(self.clean_prefix, command_name)
 
-bot = commands.Bot(command_prefix="!", 
+bot = commands.Bot(command_prefix="?", 
                    help_command=CustomDefaultHelpCommand(), 
                    description='Retrieve rolls for Destiny 2 weapons')
 bot.current_state: State = State()
