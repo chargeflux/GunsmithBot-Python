@@ -498,6 +498,7 @@ class Weapon:
                 stat_type = constants.WeaponStats(stat_hash) 
                 stat_value = stat["value"]
                 if stat_value == 0:
+                    logger.debug(f'{stat_type.name} had a value of 0')
                     continue
                 weapon_stat_info = WeaponStatInfo(stat_type, stat_value)
             except ValueError:
