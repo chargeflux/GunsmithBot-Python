@@ -73,7 +73,7 @@ class UpdateManifest(commands.Cog):
             await pydest_loader.update_manifest(bot.current_state.destiny_api)
             manifest_location = await pydest_loader.get_manifest(bot.current_state.destiny_api)
             if manifest_location != bot.current_state.current_manifest:
-                logger.info(f"The manifest was updated. Adding {old_manifest} for deletion")
+                logger.info(f"The manifest was updated. Adding {bot.current_state.current_manifest} for deletion")
                 bot.current_state.old_manifests.append(bot.current_state.current_manifest)
                 bot.current_state.current_manifest = manifest_location
 
