@@ -497,6 +497,8 @@ class Weapon:
                 stat_hash = stat["statHash"]
                 stat_type = constants.WeaponStats(stat_hash) 
                 stat_value = stat["value"]
+                if stat_value == 0:
+                    continue
                 weapon_stat_info = WeaponStatInfo(stat_type, stat_value)
             except ValueError:
                 logger.debug(f"Failed to match weapon stat hash: {stat_hash}")
