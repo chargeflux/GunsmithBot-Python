@@ -52,13 +52,20 @@ class Weapons(commands.Cog):
 
         logger.info("Constructing weapon result")
         DESCRIPTION = str(result.weapon_base_info) + "\n**" + result.intrinsic.name  + "**\n" + result.description
+        STATS = '\n'.join([str(stat) for stat in result.weapon_stats])
         embed = discord.Embed(title=result.name, description= DESCRIPTION, color=constants.DISCORD_BG_HEX)
         embed.set_thumbnail(url=result.icon)
 
+        field_idx = 0
         for perk in result.weapon_perks:
-            if (perk.idx + 1) % 3 == 0:
-                embed.add_field(name="\u200b", value="\u200b", inline=True)
+            if (field_idx + 1) % 3 == 0:
+                if field_idx + 1 == 3:
+                    embed.add_field(name="Stats", value=STATS, inline=True)
+                else:
+                    embed.add_field(name="\u200b", value="\u200b", inline=True)
+                field_idx += 1
             embed.add_field(name=perk.name, value=perk, inline=True)
+            field_idx += 1
         embed.add_field(name="\u200b", value="\u200b", inline=True)
 
         logger.info("Sending weapon result")

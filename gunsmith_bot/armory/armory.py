@@ -196,6 +196,9 @@ class WeaponResult:
     
     tierTypeHash : dict
         Determines the tier type of the weapon
+    
+    stats : dict
+        Holds information about the stats for this weapon
 
     current_manifest_path : str
         The path to Bungie's manifest of static definitions in Destiny 2
@@ -209,6 +212,7 @@ class WeaponResult:
         self.item_categories_hash_data = sorted(raw_weapon_data["itemCategoryHashes"])
         self.display_source_data = raw_weapon_data["displaySource"]
         self.tier_type_hash = raw_weapon_data["inventory"]["tierTypeHash"]
+        self.stats = raw_weapon_data["stats"]["stats"]
         self.current_manifest_path = current_manifest_path
 
 class Weapon:
@@ -248,6 +252,8 @@ class Weapon:
     weapon_perks: [WeaponPerkPlugInfo]
         Holds all the possible plugs for each perk if random rolled. Otherwise it will show
         the static roll
+
+    stats: WeaponStats
     '''
 
     def __init__(self, weapon_result):
@@ -258,7 +264,7 @@ class Weapon:
         self.current_manifest_path = weapon_result.current_manifest_path
 
         self.weapon_base_info = self._set_base_info(weapon_result.item_categories_hash_data, weapon_result.tier_type_hash)
-        
+
         self.name = weapon_result.display_properties_data["name"]
         self.description = weapon_result.display_properties_data["description"]
         self.icon = constants.BUNGIE_URL_ROOT + weapon_result.display_properties_data["icon"]
@@ -267,6 +273,8 @@ class Weapon:
             self.has_random_rolls = True
         else:
             self.has_random_rolls = False
+
+        self.weapon_stats = self._set_stats_info(weapon_result.stats)
 
         self.similarity_score = difflib.SequenceMatcher(None, self.name, weapon_result.query).ratio()
 
@@ -481,6 +489,21 @@ class Weapon:
                                                                     category_data['socketIndexes'], 
                                                                     cursor)
         return intrinsic, weapon_perks
+    
+    def _set_stats_info(self, stats):
+        weapon_stats = []
+        for idx, stat in enumerate(stats.values()):
+            try:
+                stat_hash = stat["statHash"]
+                stat_type = constants.WeaponStats(stat_hash) 
+                stat_value = stat["value"]
+                weapon_stat_info = WeaponStatInfo(stat_type, stat_value)
+            except ValueError:
+                logger.debug(f"Failed to match weapon stat hash: {stat_hash}")
+                continue
+            weapon_stats.append(WeaponStat(idx,weapon_stat_info))
+        weapon_stats.sort(key=lambda x: constants.StatOrder[x.stat.stat_type])
+        return weapon_stats
 
 
     def _set_base_info(self, item_categories_hash_data, tier_type_hash):
@@ -502,12 +525,12 @@ class Weapon:
                 category = constants.WeaponBase(item_category_hash)
                 weapon_base_info.set_field(category)
             except ValueError:
-                logger.error(f"Failed to match weapon category hash: {item_category_hash}")
+                logger.debug(f"Failed to match weapon category hash: {item_category_hash}")
         try: 
             weapon_tier = constants.WeaponTierType(tier_type_hash)
             weapon_base_info.weapon_tier_type = weapon_tier
         except ValueError:
-            logger.error(f"Failed to match tier type hash: {tier_type_hash}")
+            logger.debug(f"Failed to match tier type hash: {tier_type_hash}")
         return weapon_base_info
 
 @dataclass
@@ -572,3 +595,21 @@ class WeaponBaseArchetype:
                 str_to_construct = str_to_construct[2:-1]
             return '**' + str_to_construct.strip() + '**'
         return ''
+
+@dataclass
+class WeaponStatInfo:
+    stat_type: constants.WeaponStats
+    value: int
+
+    def __str__(self):
+        if self.stat_type == constants.WeaponStats.ROUNDS_PER_MINUTE:
+            return "**RPM**: " + str(self.value)
+        return "**" + self.stat_type.name.replace("_"," ").title() + "**: " + str(self.value)
+
+@dataclass
+class WeaponStat:
+    idx: int
+    stat: WeaponStatInfo
+
+    def __str__(self):
+        return str(self.stat)
