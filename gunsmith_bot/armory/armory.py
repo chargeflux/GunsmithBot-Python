@@ -218,6 +218,7 @@ class WeaponResult:
     def __init__(self, db_id, query, raw_weapon_data, current_manifest_path):
         self.db_id = db_id
         self.query = query
+        self.hash = raw_weapon_data["hash"]
         self.display_properties_data = raw_weapon_data["displayProperties"]
         self.socket_data = raw_weapon_data["sockets"]
         self.item_categories_hash_data = sorted(raw_weapon_data["itemCategoryHashes"])
@@ -279,6 +280,7 @@ class Weapon:
         This class should be constructed through the class method `Weapon.from_weapon_result` not __init__.
         '''
         self.db_id = weapon_result.db_id
+        self.weapon_hash = weapon_result.hash
         self.current_manifest_path = weapon_result.current_manifest_path
 
         self.weapon_base_info = self._set_base_info(weapon_result.item_categories_hash_data, 
