@@ -52,7 +52,7 @@ class Armory:
             SELECT json FROM DestinyInventoryItemDefinition as item 
             WHERE json_extract(item.json, '$.displayProperties.name') LIKE ?''', ("%" + query + "%",))
 
-            weapon_perk = None
+            weapon_perks = []
 
             async for row in cursor:
                 raw_perk_data = json.loads(row[0])
@@ -60,14 +60,19 @@ class Armory:
                     try:
                         plug_category = constants.PlugCategoryHash(raw_perk_data["plug"]["plugCategoryHash"])
                         weapon_perk = WeaponPerkPlugInfo.from_raw_perk_data(raw_perk_data, plug_category)
-                        break
+                        weapon_perks.append([weapon_perk,"score"])
                     except ValueError:
                         continue
+            
+            for perk in weapon_perks:
+                perk[1] = difflib.SequenceMatcher(None, perk[0].name, query).ratio()
+            
+            weapon_perks.sort(key = lambda x: x[1], reverse= True)
 
-            if not weapon_perk:
+            if not weapon_perks:
                 raise ValueError
             else:
-                return weapon_perk
+                return weapon_perks[0][0]
     
     async def get_perk_details(self, query):
         '''
@@ -212,6 +217,7 @@ class WeaponResult:
         self.item_categories_hash_data = sorted(raw_weapon_data["itemCategoryHashes"])
         self.display_source_data = raw_weapon_data["displaySource"]
         self.tier_type_hash = raw_weapon_data["inventory"]["tierTypeHash"]
+        self.damage_type_id = raw_weapon_data["defaultDamageType"]
         self.stats = raw_weapon_data["stats"]["stats"]
         self.current_manifest_path = current_manifest_path
 
@@ -263,7 +269,9 @@ class Weapon:
         self.db_id = weapon_result.db_id
         self.current_manifest_path = weapon_result.current_manifest_path
 
-        self.weapon_base_info = self._set_base_info(weapon_result.item_categories_hash_data, weapon_result.tier_type_hash)
+        self.weapon_base_info = self._set_base_info(weapon_result.item_categories_hash_data, 
+                                                    weapon_result.tier_type_hash,
+                                                    weapon_result.damage_type_id)
 
         self.name = weapon_result.display_properties_data["name"]
         self.description = weapon_result.display_properties_data["description"]
@@ -509,7 +517,7 @@ class Weapon:
         return weapon_stats
 
 
-    def _set_base_info(self, item_categories_hash_data, tier_type_hash):
+    def _set_base_info(self, item_categories_hash_data, tier_type_hash, damage_type_id):
         '''
         Sets the base archetype information for the weapon 
 
@@ -534,6 +542,12 @@ class Weapon:
             weapon_base_info.weapon_tier_type = weapon_tier
         except ValueError:
             logger.debug(f"Failed to match tier type hash: {tier_type_hash}")
+        try:
+            weapon_damage_type = constants.DamageType(damage_type_id)
+            weapon_base_info.weapon_damage_type = weapon_damage_type
+            weapon_base_info.is_energy = damage_type_id > 1
+        except ValueError:
+            logger.debug(f"Failed to match damage type id: {damage_type_id}")
         return weapon_base_info
 
 @dataclass
@@ -574,10 +588,18 @@ class WeaponBaseArchetype:
 
     weapon_tier_type: constants.WeaponTierType
         Determines the weapon's tier, e.g., legendary
+
+    weapon_damage_type: constants.DamageType
+        Determines the weapon's damage type
+
+    is_energy: bool
+        Determines if the weapon deals energy or kinetic damage
     '''
     weapon_class: constants.WeaponBase = None
     weapon_type: constants.WeaponBase = None
     weapon_tier_type: constants.WeaponTierType = None
+    weapon_damage_type: constants.DamageType = None
+    is_energy: bool = None
 
     def set_field(self, input: constants.WeaponBase):
         if input.value < 5:
@@ -587,8 +609,10 @@ class WeaponBaseArchetype:
 
     def __str__(self):
         str_to_construct = ''
+        if self.is_energy:
+            str_to_construct += self.weapon_damage_type.name.title() + " "
         if self.weapon_class:
-            str_to_construct = self.weapon_class.name.title()
+            str_to_construct += self.weapon_class.name.title()
         if self.weapon_type:
             str_to_construct += ' ' + self.weapon_type.name.replace('_',' ').title()
         if self.weapon_tier_type:

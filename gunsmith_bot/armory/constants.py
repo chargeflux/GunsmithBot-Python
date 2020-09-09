@@ -62,6 +62,12 @@ class WeaponTierType(Enum):
     LEGENDARY = 4008398120
     EXOTIC = 2759499571
 
+class DamageType(Enum):
+    KINETIC = 1
+    ARC = 2
+    SOLAR = 3
+    VOID = 4
+
 class WeaponStats(Enum):
     ACCURACY = 1591432999
     AIM_ASSISTANCE = 1345609583
