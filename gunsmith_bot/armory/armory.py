@@ -167,7 +167,7 @@ class Armory:
         weapons = []
         for weapon_result in weapon_results:
             weapon = await Weapon.from_weapon_result(weapon_result)
-            if weapon.has_random_rolls:
+            if weapon.has_random_rolls or weapon.weapon_base_info.weapon_tier_type.name.title() == "Exotic":
                 weapons.insert(0, weapon)
             else:
                 weapons.append(weapon)
