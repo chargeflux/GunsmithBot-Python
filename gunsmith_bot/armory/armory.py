@@ -167,7 +167,7 @@ class Armory:
         weapons = []
         for weapon_result in weapon_results:
             weapon = await Weapon.from_weapon_result(weapon_result)
-            if weapon.has_random_rolls or weapon.weapon_base_info.weapon_tier_type.name.title() == "Exotic":
+            if weapon.has_random_rolls or weapon.weapon_base_info.weapon_tier_type == constants.WeaponTierType.EXOTIC:
                 weapons.insert(0, weapon)
             else:
                 weapons.append(weapon)
@@ -199,9 +199,15 @@ class WeaponResult:
     display_source_data: str
         Determines if it has random rolls or not
     
-    tierTypeHash : dict
+    tierTypeHash: int
         Determines the tier type of the weapon
-    
+
+    damage_type_id: int
+        Determines the energy damage type
+
+    power_cap_hashes: int
+        Determines the power cap for each version of the weapon
+
     stats : dict
         Holds information about the stats for this weapon
 
@@ -218,6 +224,12 @@ class WeaponResult:
         self.display_source_data = raw_weapon_data["displaySource"]
         self.tier_type_hash = raw_weapon_data["inventory"]["tierTypeHash"]
         self.damage_type_id = raw_weapon_data["defaultDamageType"]
+        
+        power_cap_hashes = []
+        for version in raw_weapon_data["quality"]["versions"]:
+            power_cap_hashes.append(version['powerCapHash'])            
+        self.power_cap_hashes = power_cap_hashes
+        
         self.stats = raw_weapon_data["stats"]["stats"]
         self.current_manifest_path = current_manifest_path
 
@@ -314,6 +326,7 @@ class Weapon:
     async def from_weapon_result(cls, weapon_result):
         new_weapon = cls(weapon_result)
         new_weapon.intrinsic, new_weapon.weapon_perks = await new_weapon._process_socket_data(weapon_result.socket_data)
+        new_weapon.weapon_base_info.power_cap = await new_weapon._process_power_cap(weapon_result.power_cap_hashes)
         return new_weapon
 
     def _convert_hash(self, val):
@@ -549,6 +562,31 @@ class Weapon:
         except ValueError:
             logger.debug(f"Failed to match damage type id: {damage_type_id}")
         return weapon_base_info
+    
+    async def _process_power_cap(self, power_cap_hashes):
+        '''
+        Retrieves the power caps for all versions of the weapon and returns the max power cap
+
+        Parameters
+        ----------
+        power_cap_hashes : [int]
+            The hashes that correspond to the power caps of all versions of the weapon
+        
+        Returns
+        -------
+        int
+        '''
+        power_caps = []
+        async with aiosqlite.connect(self.current_manifest_path) as conn:
+            cursor = await conn.cursor()
+
+            await cursor.execute(f'''
+            SELECT MAX(json_extract(json, '$.powerCap')) 
+            FROM DestinyPowerCapDefinition AS item 
+            WHERE json_extract(item.json, '$.hash') IN ({",".join(["?"]*len(power_cap_hashes))})''', power_cap_hashes)
+            
+            power_cap = (await cursor.fetchone())[0]
+        return power_cap
 
 @dataclass
 class WeaponPerkPlugInfo:
@@ -600,12 +638,26 @@ class WeaponBaseArchetype:
     weapon_tier_type: constants.WeaponTierType = None
     weapon_damage_type: constants.DamageType = None
     is_energy: bool = None
+    power_cap: int = None
 
     def set_field(self, input: constants.WeaponBase):
         if input.value < 5:
             self.weapon_class = input
         else:
             self.weapon_type = input
+
+    @property
+    def power_cap(self):
+        if not self._power_cap:
+            raise AttributeError("No power cap!")
+        return self._power_cap
+    
+    @power_cap.setter
+    def power_cap(self, value):
+        if self.weapon_tier_type == constants.WeaponTierType.EXOTIC:
+            self._power_cap = None
+        else:
+            self._power_cap = value
 
     def __str__(self):
         str_to_construct = ''
@@ -615,8 +667,10 @@ class WeaponBaseArchetype:
             str_to_construct += self.weapon_class.name.title()
         if self.weapon_type:
             str_to_construct += ' ' + self.weapon_type.name.replace('_',' ').title()
-        if self.weapon_tier_type:
-            str_to_construct += ' ' + '(' + self.weapon_tier_type.name.title() + ')'
+        try:    
+            str_to_construct += ' ' + '(' + str(self.power_cap) + ')'
+        except AttributeError:
+            pass
         if str_to_construct:
             if str_to_construct[1] == "(":
                 str_to_construct = str_to_construct[2:-1]
