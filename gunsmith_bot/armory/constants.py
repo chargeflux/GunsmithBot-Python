@@ -7,7 +7,7 @@ class SocketCategoryHash(Enum):
     WEAPON_PERKS = 4241085061
 
 class PlugCategoryHash(Enum):
-    INTRINSICS = 3956125808
+    INTRINSICS = 1744546145
     STOCKS = 577918720
     PERKS = 7906839
     FRAMES = 7906839
