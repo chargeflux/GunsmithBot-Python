@@ -1,6 +1,7 @@
 import logging
 from logging.handlers import TimedRotatingFileHandler
 import os
+import glob
 import asyncio
 import datetime
 from dataclasses import dataclass, field
@@ -76,6 +77,9 @@ class UpdateManifest(commands.Cog):
                 logger.info(f"The manifest was updated. Adding {bot.current_state.current_manifest} for deletion")
                 bot.current_state.old_manifests.append(bot.current_state.current_manifest)
                 bot.current_state.current_manifest = manifest_location
+        else:
+            logger.critical("PyDest missing. Reinitializing")
+            bot.current_state.destiny_api = await pydest_loader.initialize_destiny()
 
     @update_manifest.before_loop
     async def before_update_manifest(self):
@@ -99,6 +103,17 @@ async def on_ready():
             logger.critical("Failed to retrieve manifest. Quitting.")
             await bot.current_state.destiny_api.close()
             await bot.logout()
+
+    logger.info("Deleting old manifests")
+    files = glob.glob("*.content")
+    for file in files:
+        if file != bot.current_state.current_manifest:
+            try:
+                os.remove("./" + file)
+                logger.info(f"{file} was deleted")
+            except OSError as ex:
+                logger.critical(f"Failed to remove old manifest: {file}")
+                logger.exception(ex)
 
 logger.info("Starting up bot")
 bot.add_cog(UpdateManifest(bot))
