@@ -24,6 +24,7 @@ class PlugCategoryHash(Enum):
     ARROWS = 1257608559
     LAUNCHERS = 1202604782
     TUBES = 1202604782
+    DEFAULT = -1 # User defined
 
     @classmethod
     def is_valid(cls, category_name):

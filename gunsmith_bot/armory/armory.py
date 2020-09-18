@@ -419,6 +419,7 @@ class Weapon:
             Returns a list of weapon perks where each is a `WeaponPerk`
         '''
         weapon_perks = []
+        default_plugs = []
         for order_idx, index in enumerate(socket_indexes):
             socket = socket_entries[index]
             socket_type_hash = socket['socketTypeHash']
@@ -460,6 +461,15 @@ class Weapon:
             async for row in cursor:
                 converted_plug_id_results.append(self._convert_hash(row[0]))
 
+            default_plug_perk_hashes = []
+            converted_default_plug_perk_hashes = []
+            for item in socket["reusablePlugItems"]:
+                default_plug_perk_hashes.append(item["plugItemHash"])
+                converted_default_plug_perk_hashes.append(self._convert_hash(item["plugItemHash"]))
+            if not default_plug_perk_hashes:
+                default_plug_perk_hashes.append(socket["singleInitialItemHash"])
+                converted_default_plug_perk_hashes.append(self._convert_hash(socket["singleInitialItemHash"]))
+
             # SQL does not support binding to a list. Therefore we can dynamically insert question marks
             # based on the length of the converted_plug_id_results. Additionally, since we are only inserting 
             # question marks, we are not exposing ourselves to a security risk
@@ -467,7 +477,8 @@ class Weapon:
                 f'''
                 SELECT json_extract(item.json, "$.displayProperties") 
                 FROM DestinyInventoryItemDefinition as item
-                WHERE item.id in ({",".join(["?"]*len(converted_plug_id_results))})''', converted_plug_id_results)
+                WHERE item.id in ({",".join(["?"]*len(converted_plug_id_results))})''', 
+                converted_plug_id_results)
             
             plugs = []
             async for plug in cursor:
@@ -476,8 +487,23 @@ class Weapon:
                                                 description = plug_info['description'],
                                                 icon = plug_info['icon'],
                                                 category = plug_category))
-
+            
             weapon_perks.append(WeaponPerk(idx = order_idx, name = plug_category.name.title(), plugs = plugs))
+            
+            await cursor.execute(
+                f'''
+                SELECT json_extract(item.json, "$.displayProperties") 
+                FROM DestinyInventoryItemDefinition as item
+                WHERE item.id in ({",".join(["?"]*len(converted_default_plug_perk_hashes))})''', 
+                converted_default_plug_perk_hashes)
+            
+            async for plug in cursor:
+                plug_info = json.loads(plug[0])
+                default_plugs.append(WeaponPerkPlugInfo(name = plug_info['name'],
+                                     description = plug_info['description'],
+                                     icon = plug_info['icon'],
+                                     category = constants.PlugCategoryHash.DEFAULT))
+        weapon_perks.append(WeaponPerk(idx = len(weapon_perks), name = constants.PlugCategoryHash.DEFAULT.name.title(), plugs = default_plugs))
         return weapon_perks
 
 

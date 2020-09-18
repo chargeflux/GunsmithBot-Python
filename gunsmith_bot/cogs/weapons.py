@@ -66,8 +66,7 @@ class Weapons(commands.Cog):
                 field_idx += 1
             embed.add_field(name=perk.name, value=perk, inline=True)
             field_idx += 1
-        embed.add_field(name="\u200b", value="\u200b", inline=True)
-
+        
         light_gg_url = "https://www.light.gg/db/items/" + str(result.weapon_hash)
         embed.add_field(name="\u200b", value=light_gg_url, inline=False)
 
