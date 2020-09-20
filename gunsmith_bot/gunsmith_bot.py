@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 import discord
 from discord.ext import commands, tasks
 import pydest
-from armory import pydest_loader
+from armory import pydest_loader, WeaponRollDB
 
 if not os.path.exists("logs/"):
     os.mkdir("logs")
@@ -34,12 +34,11 @@ if not (DISCORD_KEY := os.environ.get("DISCORD_KEY")):
 class State():
     current_manifest: str = ''
     destiny_api: pydest = None
-    old_manifests: [str] = field(default_factory=list)
 
 class CustomDefaultHelpCommand(commands.DefaultHelpCommand):
     def __init__(self):
         super().__init__(no_category="Misc")
-        self.command_attrs['name'] = "gunsmith -help"
+        self.command_attrs['name'] = "help"
     
     def get_ending_note(self):
         command_name = self.command_attrs['name']
@@ -61,25 +60,34 @@ class UpdateManifest(commands.Cog):
 
     @tasks.loop(hours=24)
     async def update_manifest(self):
-        for old_manifest in bot.current_state.old_manifests:
-            try:
-                os.remove("./" + old_manifest)
-                logger.info(f"{old_manifest} was deleted")
-            except OSError as ex:
-                logger.critical(f"Failed to remove old manifest: {old_manifest}")
-                logger.exception(ex)
-        bot.current_state.old_manifests = [] # note: clears even if deletion is unsucessful
+        if bot.current_state.current_manifest:
+            logger.info("Checking if old manifests and weapon roll dbs need to be deleted")
+            files = glob.glob("*.content")
+            for file in files:
+                if file != bot.current_state.current_manifest:
+                    try:
+                        os.remove("./" + file)
+                        logger.info(f"{file} was deleted")
+                    except OSError as ex:
+                        logger.critical(f"Failed to remove old file: {file}")
+                        logger.exception(ex)
+                    try:
+                        os.remove("./" + file + ".weapons")
+                        logger.info(f"{file + '.weapons'} was deleted")
+                    except OSError as ex:
+                        logger.critical(f"Failed to remove old weapons db: {file + '.weapons'}")
+                        logger.exception(ex)
 
         if bot.current_state.destiny_api:
             await pydest_loader.update_manifest(bot.current_state.destiny_api)
             manifest_location = await pydest_loader.get_manifest(bot.current_state.destiny_api)
             if manifest_location != bot.current_state.current_manifest:
-                logger.info(f"The manifest was updated. Adding {bot.current_state.current_manifest} for deletion")
-                bot.current_state.old_manifests.append(bot.current_state.current_manifest)
+                logger.info(f"The manifest was updated: {manifest_location}")
                 bot.current_state.current_manifest = manifest_location
-        else:
-            logger.critical("PyDest missing. Reinitializing")
-            bot.current_state.destiny_api = await pydest_loader.initialize_destiny()
+            weapon_roll_db = WeaponRollDB(bot.current_state.current_manifest)
+            if not weapon_roll_db.check_DB_exists():
+                logger.info("Reinitalizing weapon roll database")
+                weapon_roll_db.initializeDB()
 
     @update_manifest.before_loop
     async def before_update_manifest(self):
@@ -96,6 +104,11 @@ async def on_ready():
         try:
             bot.current_state.destiny_api = await pydest_loader.initialize_destiny()
             bot.current_state.current_manifest = await pydest_loader.get_manifest(bot.current_state.destiny_api)
+            logger.info("Loaded current manifest")
+            weapon_roll_db = WeaponRollDB(bot.current_state.current_manifest)
+            if not weapon_roll_db.check_DB_exists():
+                logger.info("Reinitalizing weapon roll database")
+                weapon_roll_db.initializeDB()
         except pydest.PydestException:
             logger.critical("Failed to initialize PyDest. Quitting.")
             await bot.logout()
@@ -104,7 +117,7 @@ async def on_ready():
             await bot.current_state.destiny_api.close()
             await bot.logout()
 
-    logger.info("Deleting old manifests")
+    logger.info("Checking if old manifests and weapon roll dbs need to be deleted")
     files = glob.glob("*.content")
     for file in files:
         if file != bot.current_state.current_manifest:
@@ -112,7 +125,13 @@ async def on_ready():
                 os.remove("./" + file)
                 logger.info(f"{file} was deleted")
             except OSError as ex:
-                logger.critical(f"Failed to remove old manifest: {file}")
+                logger.critical(f"Failed to remove old file: {file}")
+                logger.exception(ex)
+            try:
+                os.remove("./" + file + ".weapons")
+                logger.info(f"{file + '.weapons'} was deleted")
+            except OSError as ex:
+                logger.critical(f"Failed to remove old weapons db: {file + '.weapons'}")
                 logger.exception(ex)
 
 logger.info("Starting up bot")

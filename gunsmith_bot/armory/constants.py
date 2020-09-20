@@ -116,4 +116,20 @@ StatOrder = {
     WeaponStats.MAGAZINE: 20
 }
     
-
+PlugCategoryTables = [
+    "intrinsics",
+    "stocks",
+    "perks1",
+    "perks2",
+    "barrels",
+    "bowstrings",
+    "magazines",
+    "projectiles",
+    "blades",
+    "grips",
+    "batteries",
+    "guards",
+    "scopes",
+    "arrows",
+    "launchers"
+]

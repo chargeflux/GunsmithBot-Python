@@ -4,7 +4,7 @@ import asyncio
 from sqlite3 import OperationalError
 import discord
 from discord.ext import commands
-from armory import Armory
+from armory import Armory, WeaponRollFinder, PlugCategoryTables
 from . import constants
 
 logger = logging.getLogger('Gunsmith.Weapons')
@@ -12,6 +12,18 @@ logger = logging.getLogger('Gunsmith.Weapons')
 class Weapons(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+        self._help_text_search_by_perk()
+
+    def _help_text_search_by_perk(self):
+        if hasattr(self.search_by_perk, "help"):
+            help_text = """Multiple perks of the same type (e.g., barrels) can be searched by separating with a comma.
+            
+"perks1" and "perks2" refer to the 2 columns that contain perks like Outlaw and Rampage. If both are specified, they will be considered as separate groups.
+            
+`?gunsmith -search -perks1 Outlaw, Snapshot Sights -perks2 Rampage` will only retrieve weapons that can roll Outlaw or Snapshot in one column and Rampage in the other.\n\n"""
+            help_text += "Perk Types:\n" + "\n".join(PlugCategoryTables)
+            self.search_by_perk.help = help_text
 
     @commands.group(invoke_without_command=True, 
             brief="Get information about weapons or perks", 
@@ -116,30 +128,63 @@ class Weapons(commands.Cog):
         await ctx.send(embed=embed)
         return
 
-    @gunsmith.command(name="-help",
-                      hidden=True)
-    async def help(self, ctx, *args):
+    @gunsmith.command(name="-search",
+                      brief="Search for weapons with specific perks", 
+                      description="Search for weapons with specific perks", 
+                      usage="-<perk type> <perk name>",
+                      help="")
+    async def search_by_perk(self, ctx, *, arg):
         '''
-        This function corresponds to the "?gunsmith -help" command.
+        This function corresponds to the "?gunsmith -search -<perk type> <perk name>" command.
 
         Parameters
         ----------
         ctx
             The context of the command being invoked. Constructed by `discord.py`
-        *args
-            The arguments of the command as a tuple separated by whitespace, after "?gunsmith -help"
+        arg
+            The arguments of the command, after "?gunsmith -search"
         '''
-        if not args:
-            await ctx.send_help(*args)
-        else:
-            await ctx.send_help(' '.join(args))
+        query = arg
+
+        logger.info(ctx.message.content)
+
+        if not os.path.exists(self.bot.current_state.current_manifest):
+            logger.critical(f"Manifest queried does not exist at {self.bot.current_state.current_manifest}")
+            await ctx.send("An error occured. Please try again!")
+            return
+
+        logger.info(f"Searching with parameters: '{query}'")
+
+        weapon_plug_db = WeaponRollFinder(self.bot.current_state.current_manifest)
+        result_count, results = await weapon_plug_db.process_query(query)
+
+        if not result_count:
+            await ctx.send("No weapons found! Check or modify your query. Use `?help -search` for help")
+            return
+
+        logger.info("Constructing weapon results")
+        
+        embed = discord.Embed(title="Weapon Results", description=f"{result_count} weapons found", color=constants.DISCORD_BG_HEX)
+
+        field_idx = 0
+
+        sorted_results_keys = sorted(results.keys())
+        for weapon_type in sorted_results_keys:
+            weapon_list = '\n'.join(results[weapon_type])
+            embed.add_field(name=weapon_type, value=weapon_list, inline=True)
+
+        logger.info("Sending weapon search results")
+        await ctx.send(embed=embed)
         return
 
     @gunsmith.error
     @perk.error
+    @search_by_perk.error
     async def on_error(self, ctx, error):
         if ctx.invoked_with == "-perk":
             command_type = "perk"
+        elif ctx.invoked_with == "-search":
+            command_type = "weapon perks"
         else:
             command_type = "weapon"
         if hasattr(error, 'original'):
@@ -163,10 +208,10 @@ class Weapons(commands.Cog):
                 await ctx.send('An error occured. Please try again.')
                 return
         if isinstance(error, commands.BadArgument):
-            await ctx.send(f"Please enter the {command_type} name.")
+            await ctx.send(f"Please enter the {command_type}.")
             return
         if isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send(f"Please enter the {command_type} name. Run '?gunsmith -help' for more information.")
+            await ctx.send(f"Please enter the {command_type}. Run '?gunsmith -help' for more information.")
             return
 
 def setup(bot):
