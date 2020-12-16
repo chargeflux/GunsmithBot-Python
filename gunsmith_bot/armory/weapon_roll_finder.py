@@ -356,8 +356,6 @@ class WeaponRollFinder:
                     perk_weapon_ids = perk_weapon_ids.intersection(db_ids)
                 elif db_ids:
                     perk_weapon_ids = db_ids
-                else:
-                    logger.error(f"{perk} not found in {category}")
         return perk_weapon_ids
     
     async def _process_perk_groups(self, perk_groups, multiple=False):
@@ -398,7 +396,6 @@ class WeaponRollFinder:
                         db_ids_perks1.perks.append(result)
                     if len(db_ids_perks1.perks) != len(perk_names):
                         db_ids_perks1 = None
-                        logger.error(f"Not found in perks1 table: {perk_names}")
                     else:
                         status += 1
                         db_ids_perks1.perks = set.intersection(*db_ids_perks1.perks)
@@ -414,7 +411,6 @@ class WeaponRollFinder:
                         db_ids_perks2.perks.append(result)
                     if len(db_ids_perks2.perks) != len(perk_names):
                         db_ids_perks2 = None
-                        logger.error(f"Not found in perks2 table: {perk_names}")
                     else:
                         status += 1
                         db_ids_perks2.perks = set.intersection(*db_ids_perks2.perks)
@@ -462,8 +458,6 @@ class WeaponRollFinder:
                         db_ids_perks.append(result)
                     if len(db_ids_perks) == len(perk_names):
                         perk_weapon_ids_current_group = set.intersection(*db_ids_perks)
-                    else:
-                        logger.error(f"Not found in perks1 table: {perk_names}")
 
                     sql = f'''SELECT db_ids FROM perks2 
                                 WHERE perk_name in ({",".join(["?"]*len(perk_names))})'''
@@ -477,8 +471,8 @@ class WeaponRollFinder:
                         if perk_weapon_ids_current_group:
                             perk_weapon_ids_current_table = set.intersection(*db_ids_perks)
                             perk_weapon_ids_current_group = perk_weapon_ids_current_group.union(perk_weapon_ids_current_table)
-                    else:
-                        logger.error(f"Not found in perks2 table: {perk_names}")
+                        else:
+                            perk_weapon_ids_current_group = set.intersection(*db_ids_perks)
 
                     if perk_weapon_ids and perk_weapon_ids_current_group:
                         perk_weapon_ids.intersection(perk_weapon_ids_current_group)
@@ -517,7 +511,7 @@ class WeaponRollFinder:
         try:
             result_weapon_ids = list(set.intersection(*result_weapon_ids))
         except:
-            logger.error("One of the query plugs was incorrect. No weapons found")
+            logger.info("One of the query plugs was incorrect. No weapons found")
             result_weapon_ids = None
 
         return result_weapon_ids
