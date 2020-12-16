@@ -451,7 +451,7 @@ class Weapon:
 
             await cursor.execute(
             '''
-            SELECT json_extract(j.value, '$.plugItemHash') 
+            SELECT json_extract(j.value, '$.plugItemHash'), json_extract(j.value, '$.currentlyCanRoll') 
             FROM DestinyPlugSetDefinition as item, 
             json_each(item.json, '$.reusablePlugItems') as j
             WHERE item.id = ?''', (converted_plug_set_hash,))
@@ -459,7 +459,8 @@ class Weapon:
             converted_plug_id_results = []
 
             async for row in cursor:
-                converted_plug_id_results.append(self._convert_hash(row[0]))
+                if row[1]:
+                    converted_plug_id_results.append(self._convert_hash(row[0]))
 
             default_plug_perk_hashes = []
             converted_default_plug_perk_hashes = []
