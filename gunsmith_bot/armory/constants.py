@@ -58,7 +58,7 @@ class WeaponBase(Enum):
 
 class WeaponTierType(Enum):
     BASIC = 3340296461
-    UNCOMMON = 2395677314
+    COMMON = 2395677314
     RARE = 2127292149
     LEGENDARY = 4008398120
     EXOTIC = 2759499571
