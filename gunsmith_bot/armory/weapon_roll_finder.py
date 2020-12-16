@@ -627,7 +627,7 @@ class WeaponRollFinder:
                     category_hashes = json.loads(weapon[1])
                     weapon_type = self._parse_weapon_type(category_hashes)
                     if weapon_type:
-                        weapons.setdefault(weapon_type, []).append(weapon[0]) 
+                        weapons.setdefault(weapon_type, set()).add(weapon[0]) 
                 return len(result), weapons
         else:
             return 0, None
