@@ -78,12 +78,63 @@ class Weapons(commands.Cog):
                 field_idx += 1
             embed.add_field(name=perk.name, value=perk, inline=True)
             field_idx += 1
+        embed.add_field(name="\u200b", value="\u200b", inline=True)
         
         light_gg_url = "https://www.light.gg/db/items/" + str(result.weapon_hash)
         embed.add_field(name="\u200b", value=light_gg_url, inline=False)
 
         logger.info("Sending weapon result")
         await ctx.send(embed=embed)
+    
+    @gunsmith.command(name="-default",
+                      brief="Get default rolls for a weapon", 
+                      description="Get default rolls for a weapon", 
+                      usage="<weapon>",
+                      help="")
+    async def default_perks(self, ctx, *, arg):
+        '''
+        This function corresponds to the "?gunsmith -default <weapon>" command.
+
+        Parameters
+        ----------
+        ctx
+            The context of the command being invoked. Constructed by `discord.py`
+        arg
+            The arguments of the command, after "?gunsmith -default"
+        '''
+        weapon = arg
+
+        logger.info(ctx.message.content)
+
+        if len(weapon) < 3:
+            await ctx.send("Please enter a query of 3 or more characters!")
+            return
+
+        if not os.path.exists(self.bot.current_state.current_manifest):
+            logger.critical(f"Manifest queried does not exist at {self.bot.current_state.current_manifest}")
+            await ctx.send("An error occured. Please try again!")
+            return
+
+        armory = Armory(self.bot.current_state.current_manifest)
+
+        weapons = await armory.get_weapon_details(weapon, default=True)
+
+        logger.info(f"# of weapons found: {len(weapons)}")
+        result = weapons[0] # TODO: pagination
+
+        logger.info("Constructing weapon result")
+        DESCRIPTION = str(result.weapon_base_info) + "\n**" + result.intrinsic.name  + "**\n" + result.description
+        embed = discord.Embed(title=result.name, description= DESCRIPTION, color=constants.DISCORD_BG_HEX)
+        embed.set_thumbnail(url=result.icon)
+        perk = result.weapon_perks[0]
+        embed.add_field(name=perk.name, value=perk, inline=True)
+        
+        light_gg_url = "https://www.light.gg/db/items/" + str(result.weapon_hash)
+        embed.add_field(name="\u200b", value=light_gg_url, inline=False)
+
+        logger.info("Sending weapon result")
+        await ctx.send(embed=embed)
+        return
 
     @gunsmith.command(name="-perk",
                       brief="Get information about a perk", 
@@ -180,6 +231,7 @@ class Weapons(commands.Cog):
     @gunsmith.error
     @perk.error
     @search_by_perk.error
+    @default_perks.error
     async def on_error(self, ctx, error):
         if ctx.invoked_with == "-perk":
             command_type = "perk"
@@ -213,6 +265,7 @@ class Weapons(commands.Cog):
         if isinstance(error, commands.MissingRequiredArgument):
             await ctx.send(f"Please enter the {command_type}. Run '?gunsmith -help' for more information.")
             return
+
 
 def setup(bot):
     bot.add_cog(Weapons(bot))

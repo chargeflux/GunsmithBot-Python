@@ -147,7 +147,7 @@ class Armory:
         return True
 
 
-    async def get_weapon_details(self, query):
+    async def get_weapon_details(self, query, default=False):
         '''
         Search and retrieve information about a Destiny 2 weapon from Bungie's manifest
 
@@ -166,7 +166,7 @@ class Armory:
 
         weapons = []
         for weapon_result in weapon_results:
-            weapon = await Weapon.from_weapon_result(weapon_result)
+            weapon = await Weapon.from_weapon_result(weapon_result, default)
             if weapon.has_random_rolls or weapon.weapon_base_info.weapon_tier_type == constants.WeaponTierType.EXOTIC:
                 weapons.insert(0, weapon)
             else:
@@ -275,7 +275,7 @@ class Weapon:
     stats: WeaponStats
     '''
 
-    def __init__(self, weapon_result):
+    def __init__(self, weapon_result, default=False):
         '''
         This class should be constructed through the class method `Weapon.from_weapon_result` not __init__.
         '''
@@ -296,7 +296,8 @@ class Weapon:
         else:
             self.has_random_rolls = False
 
-        self.weapon_stats = self._set_stats_info(weapon_result.stats)
+        if not default:
+            self.weapon_stats = self._set_stats_info(weapon_result.stats)
 
         self.similarity_score = difflib.SequenceMatcher(None, self.name, weapon_result.query).ratio()
 
@@ -325,9 +326,9 @@ class Weapon:
         self._weapon_perks = value
 
     @classmethod
-    async def from_weapon_result(cls, weapon_result):
-        new_weapon = cls(weapon_result)
-        new_weapon.intrinsic, new_weapon.weapon_perks = await new_weapon._process_socket_data(weapon_result.socket_data)
+    async def from_weapon_result(cls, weapon_result, default):
+        new_weapon = cls(weapon_result, default)
+        new_weapon.intrinsic, new_weapon.weapon_perks = await new_weapon._process_socket_data(weapon_result.socket_data, default)
         new_weapon.weapon_base_info.power_cap = await new_weapon._process_power_cap(weapon_result.power_cap_hashes)
         return new_weapon
 
@@ -393,7 +394,7 @@ class Weapon:
                                   icon = plug_info['icon'],
                                   category = constants.PlugCategoryHash.INTRINSICS)
 
-    async def _process_socket_data_perks(self, socket_entries, socket_indexes, cursor):
+    async def _process_socket_data_perks(self, socket_entries, socket_indexes, cursor, default):
         '''
         Processes socket entries corresponding to information about the perks of the weapon.
         Each socket usually has a "reusablePlugSetHash" field if it is a static-rolled weapon or
@@ -412,6 +413,9 @@ class Weapon:
         
         cursor : Cursor
             Necessary to query SQLite DB asynchronously via aiosqlite
+        
+        default : bool
+            Determine to retrieve only default rolls
 
         Returns
         -------
@@ -438,6 +442,31 @@ class Weapon:
                 plug_category = constants.PlugCategoryHash(plug_category_info["categoryHash"])
             except ValueError:
                 continue
+            
+            if default:
+                default_plug_perk_hashes = []
+                converted_default_plug_perk_hashes = []
+                for item in socket["reusablePlugItems"]:
+                    default_plug_perk_hashes.append(item["plugItemHash"])
+                    converted_default_plug_perk_hashes.append(self._convert_hash(item["plugItemHash"]))
+                if not default_plug_perk_hashes:
+                    default_plug_perk_hashes.append(socket["singleInitialItemHash"])
+                    converted_default_plug_perk_hashes.append(self._convert_hash(socket["singleInitialItemHash"]))
+                
+                await cursor.execute(
+                    f'''
+                    SELECT json_extract(item.json, "$.displayProperties") 
+                    FROM DestinyInventoryItemDefinition as item
+                    WHERE item.id in ({",".join(["?"]*len(converted_default_plug_perk_hashes))})''', 
+                    converted_default_plug_perk_hashes)
+                
+                async for plug in cursor:
+                    plug_info = json.loads(plug[0])
+                    default_plugs.append(WeaponPerkPlugInfo(name = plug_info['name'],
+                                        description = plug_info['description'],
+                                        icon = plug_info['icon'],
+                                        category = constants.PlugCategoryHash.DEFAULT))
+                continue
 
             if 'randomizedPlugSetHash' in socket:
                 plug_set_hash = socket['randomizedPlugSetHash']
@@ -462,15 +491,6 @@ class Weapon:
                 if row[1]:
                     converted_plug_id_results.append(self._convert_hash(row[0]))
 
-            default_plug_perk_hashes = []
-            converted_default_plug_perk_hashes = []
-            for item in socket["reusablePlugItems"]:
-                default_plug_perk_hashes.append(item["plugItemHash"])
-                converted_default_plug_perk_hashes.append(self._convert_hash(item["plugItemHash"]))
-            if not default_plug_perk_hashes:
-                default_plug_perk_hashes.append(socket["singleInitialItemHash"])
-                converted_default_plug_perk_hashes.append(self._convert_hash(socket["singleInitialItemHash"]))
-
             # SQL does not support binding to a list. Therefore we can dynamically insert question marks
             # based on the length of the converted_plug_id_results. Additionally, since we are only inserting 
             # question marks, we are not exposing ourselves to a security risk
@@ -490,25 +510,12 @@ class Weapon:
                                                 category = plug_category))
             
             weapon_perks.append(WeaponPerk(idx = order_idx, name = plug_category.name.title(), plugs = plugs))
-            
-            await cursor.execute(
-                f'''
-                SELECT json_extract(item.json, "$.displayProperties") 
-                FROM DestinyInventoryItemDefinition as item
-                WHERE item.id in ({",".join(["?"]*len(converted_default_plug_perk_hashes))})''', 
-                converted_default_plug_perk_hashes)
-            
-            async for plug in cursor:
-                plug_info = json.loads(plug[0])
-                default_plugs.append(WeaponPerkPlugInfo(name = plug_info['name'],
-                                     description = plug_info['description'],
-                                     icon = plug_info['icon'],
-                                     category = constants.PlugCategoryHash.DEFAULT))
-        weapon_perks.append(WeaponPerk(idx = len(weapon_perks), name = constants.PlugCategoryHash.DEFAULT.name.title(), plugs = default_plugs))
+        if default:
+            weapon_perks.append(WeaponPerk(idx = len(weapon_perks), name = constants.PlugCategoryHash.DEFAULT.name.title(), plugs = default_plugs))
         return weapon_perks
 
 
-    async def _process_socket_data(self, socket_data):
+    async def _process_socket_data(self, socket_data, default):
         '''
         Processes socket data for information about the intrinsic nature and perks
         for the weapon.
@@ -517,6 +524,9 @@ class Weapon:
         ----------
         socket_data : dict
             The socket data of the weapon to be processed
+        
+        default : bool
+            Determine to retrieve only default rolls
 
         Returns
         -------
@@ -537,7 +547,8 @@ class Weapon:
                 if category_data["socketCategoryHash"] == constants.SocketCategoryHash.WEAPON_PERKS.value:
                     weapon_perks = await self._process_socket_data_perks(socket_data["socketEntries"], 
                                                                     category_data['socketIndexes'], 
-                                                                    cursor)
+                                                                    cursor,
+                                                                    default)
         return intrinsic, weapon_perks
     
     def _set_stats_info(self, stats):

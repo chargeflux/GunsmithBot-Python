@@ -563,6 +563,9 @@ class WeaponRollFinder:
                 logger.error(f"{category} is not a valid plug category")
                 return None
         
+        if "perks2" in query and "perks1" not in query:
+            query["perks1"] = query.pop("perks2")
+
         return query
     
     def _parse_weapon_type(self, item_category_hashes):
