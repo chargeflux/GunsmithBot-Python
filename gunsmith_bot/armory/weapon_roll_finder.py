@@ -241,15 +241,16 @@ class WeaponRollDB:
 
             cursor.execute(
             '''
-            SELECT json_extract(j.value, '$.plugItemHash') 
-            FROM DestinyPlugSetDefinition as item, 
+            SELECT json_extract(j.value, '$.plugItemHash'), json_extract(j.value, '$.currentlyCanRoll') 
+            FROM DestinyPlugSetDefinition as item,
             json_each(item.json, '$.reusablePlugItems') as j
             WHERE item.id = ?''', (converted_plug_set_hash,))
 
             converted_plug_id_results = []
 
             for row in cursor:
-                converted_plug_id_results.append(self._convert_hash(row[0]))
+                if row[1]:
+                    converted_plug_id_results.append(self._convert_hash(row[0]))
 
             # SQL does not support binding to a list. Therefore we can dynamically insert question marks
             # based on the length of the converted_plug_id_results. Additionally, since we are only inserting 
