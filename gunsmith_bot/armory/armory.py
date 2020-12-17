@@ -225,6 +225,7 @@ class WeaponResult:
         self.display_source_data = raw_weapon_data["displaySource"]
         self.tier_type_hash = raw_weapon_data["inventory"]["tierTypeHash"]
         self.damage_type_id = raw_weapon_data["defaultDamageType"]
+        self.screenshot = raw_weapon_data["screenshot"]
         
         power_cap_hashes = []
         for version in raw_weapon_data["quality"]["versions"]:
@@ -290,6 +291,7 @@ class Weapon:
         self.name = weapon_result.display_properties_data["name"]
         self.description = weapon_result.display_properties_data["description"]
         self.icon = constants.BUNGIE_URL_ROOT + weapon_result.display_properties_data["icon"]
+        self.screenshot = constants.BUNGIE_URL_ROOT + weapon_result.screenshot
         
         if weapon_result.display_source_data:
             self.has_random_rolls = True

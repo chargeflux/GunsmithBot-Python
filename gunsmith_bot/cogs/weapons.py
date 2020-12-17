@@ -81,7 +81,9 @@ class Weapons(commands.Cog):
         embed.add_field(name="\u200b", value="\u200b", inline=True)
         
         light_gg_url = "https://www.light.gg/db/items/" + str(result.weapon_hash)
-        embed.add_field(name="\u200b", value=light_gg_url, inline=False)
+        ending_text_components = [f"[Screenshot]({result.screenshot})", f"[light.gg]({light_gg_url})"]
+        ending_text = " • ".join(ending_text_components)
+        embed.add_field(name="\u200b", value=ending_text, inline=False)
 
         logger.info("Sending weapon result")
         await ctx.send(embed=embed)
