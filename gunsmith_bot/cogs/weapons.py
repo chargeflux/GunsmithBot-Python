@@ -28,8 +28,8 @@ Multiple perks of the same type (e.g., barrels) can be searched by separating wi
             self.search_by_perk.help = help_text
 
     @commands.group(invoke_without_command=True, 
-            brief="Get information about weapons or perks", 
-            description="Get the rolls for a weapon or information about a perk", 
+            brief="Get information about a weapon's perks", 
+            description="Get information about a weapon's perks. Use `?gunsmith -full` to obtain rolls for all categories and stats", 
             usage="<weapon>",
             help="")
     async def gunsmith(self, ctx, *, arg):
@@ -67,20 +67,86 @@ Multiple perks of the same type (e.g., barrels) can be searched by separating wi
         logger.info("Constructing weapon result")
         DESCRIPTION = str(result.weapon_base_info) + "\n**" + result.intrinsic.name  + "**\n" + result.description
         STATS = '\n'.join([str(stat) for stat in result.weapon_stats])
+        embed = discord.Embed(title=result.name, description=DESCRIPTION, color=constants.DISCORD_BG_HEX)
+        embed.set_thumbnail(url=result.icon)
+
+        if len(result.weapon_perks) <= 2:
+            for perk in result.weapon_perks:
+                embed.add_field(name='**' + perk.name + '**', value=perk, inline=True)
+        else:
+            for perk in result.weapon_perks:
+                if perk.name == "Perks":
+                    embed.add_field(name='**' + perk.name + '**', value=perk, inline=True)
+        
+        light_gg_url = "https://www.light.gg/db/items/" + str(result.weapon_hash)
+        ending_text_components = [f"[Screenshot]({result.screenshot})", 
+                                  f"[light.gg]({light_gg_url})",
+                                  "Use -full before weapon name"] # TEMP?
+        ending_text = " • ".join(ending_text_components)
+        embed.add_field(name="\u200b", value=ending_text, inline=False)
+
+        logger.info("Sending weapon result")
+        await ctx.send(embed=embed)
+
+    @gunsmith.command(name='-full', 
+            brief="Get the full information about weapons", 
+            description="Get rolls across all categories, including barrels, magazines, etc., and stats for a weapon", 
+            usage="<weapon>",
+            help="")
+    async def gunsmith_full(self, ctx, *, arg):
+        '''
+        This function corresponds to the "?gunsmith -full <weapon>" command.
+
+        Parameters
+        ----------
+        ctx
+            The context of the command being invoked. Constructed by `discord.py`
+        arg
+            The arguments of the command, after "?gunsmith"
+        '''
+        weapon = arg
+
+        logger.info(ctx.message.content)
+
+        if len(weapon) < 3:
+            await ctx.send("Please enter a query of 3 or more characters!")
+            return
+
+        if not os.path.exists(self.bot.current_state.current_manifest):
+            logger.critical(f"Manifest queried does not exist at {self.bot.current_state.current_manifest}")
+            await ctx.send("An error occured. Please try again!")
+            return
+
+        armory = Armory(self.bot.current_state.current_manifest)
+
+        logger.info(f"Searching for '{weapon}'")
+        weapons = await armory.get_weapon_details(weapon)
+
+        logger.info(f"# of weapons found: {len(weapons)}")
+        result = weapons[0] # TODO: pagination
+
+        logger.info("Constructing weapon result")
+        DESCRIPTION = str(result.weapon_base_info) + "\n**" + result.intrinsic.name  + "**\n" + result.description
+        STATS = '\n'.join([str(stat) for stat in result.weapon_stats])
         embed = discord.Embed(title=result.name, description= DESCRIPTION, color=constants.DISCORD_BG_HEX)
         embed.set_thumbnail(url=result.icon)
 
-        field_idx = 0
-        for perk in result.weapon_perks:
-            if (field_idx + 1) % 3 == 0:
-                if field_idx + 1 == 3:
-                    embed.add_field(name="Stats", value=STATS, inline=True)
-                else:
-                    embed.add_field(name="\u200b", value="\u200b", inline=True)
+        if len(result.weapon_perks) <= 2:
+            for perk in result.weapon_perks:
+                embed.add_field(name='**' + perk.name + '**', value=perk, inline=True)
+            embed.add_field(name="Stats", value=STATS, inline=True)
+        else:
+            field_idx = 0
+            for perk in result.weapon_perks:
+                if (field_idx + 1) % 3 == 0:
+                    if field_idx + 1 == 3:
+                        embed.add_field(name="**Stats**", value=STATS, inline=True)
+                    else:
+                        embed.add_field(name="\u200b", value="\u200b", inline=True)
+                    field_idx += 1
+                embed.add_field(name='**' + perk.name + '**', value=perk, inline=True)
                 field_idx += 1
-            embed.add_field(name=perk.name, value=perk, inline=True)
-            field_idx += 1
-        embed.add_field(name="\u200b", value="\u200b", inline=True)
+            embed.add_field(name="\u200b", value="\u200b", inline=True)
         
         light_gg_url = "https://www.light.gg/db/items/" + str(result.weapon_hash)
         ending_text_components = [f"[Screenshot]({result.screenshot})", f"[light.gg]({light_gg_url})"]
@@ -214,7 +280,7 @@ Multiple perks of the same type (e.g., barrels) can be searched by separating wi
         result_count, results = await weapon_plug_db.process_query(query)
 
         if not result_count:
-            await ctx.send("No weapons found! Check or modify your query. Use `?help -search` for help")
+            await ctx.send("No weapons found! Check or modify your query. Use `?help gunsmith -search` for help")
             return
 
         logger.info("Constructing weapon results")
@@ -267,7 +333,7 @@ Multiple perks of the same type (e.g., barrels) can be searched by separating wi
             await ctx.send(f"Please enter the {command_type}.")
             return
         if isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send(f"Please enter the {command_type}. Run '?gunsmith -help' for more information.")
+            await ctx.send(f"Please enter the {command_type}. Run '?help gunsmith' for more information.")
             return
 
 
