@@ -348,7 +348,7 @@ class WeaponRollFinder:
             db_ids = None
             for perk in perk_names:
                 sql = f'''SELECT db_ids FROM {category} WHERE perk_name LIKE ?'''
-                await cursor.execute(sql, ("%" + perk + "%",))
+                await cursor.execute(sql, (perk,))
                 async for result in cursor:
                     result = result[0].split(",")
                     db_ids = set(map(int, result))
