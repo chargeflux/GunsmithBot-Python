@@ -538,12 +538,15 @@ class WeaponRollFinder:
         Parameters
         ----------
         raw_query : str
-            Formatted as -<perk type> <perk name>, <perk name> -<perk type> <perk name>
+            Formatted as -type <weapon type name> -<perk type> <perk name>, <perk name> -<perk type> <perk name>
         
         Returns
         ----------
         query : dict or None
             Maps the associated list of perk names to each perk type/plug category
+        
+        weapon_type : str or None
+            The type of weapon if specified
         '''
         raw_query = raw_query.split()
         current_key = None
@@ -564,6 +567,11 @@ class WeaponRollFinder:
         if current_perks:
             perks_list = current_perks.split(", ")
             query[current_key] = perks_list
+
+        if 'type' in query:
+            weapon_type = query.pop('type')[0]
+        else:
+            weapon_type = None
         
         for category in query:
             if category not in constants.PlugCategoryTables:
@@ -573,7 +581,7 @@ class WeaponRollFinder:
         if "perks2" in query and "perks1" not in query:
             query["perks1"] = query.pop("perks2")
 
-        return query
+        return query, weapon_type
     
     def _parse_weapon_type(self, item_category_hashes):
         '''
@@ -608,7 +616,7 @@ class WeaponRollFinder:
         Parameters
         ----------
         query : str
-            Formatted as -<perk type> <perk name>, <perk name> -<perk type> <perk name>    
+            Formatted as -type <weapon type name> -<perk type> <perk name>, <perk name> -<perk type> <perk name>    
         
         Returns
         ----------
@@ -617,7 +625,7 @@ class WeaponRollFinder:
         weapons : dict or None
             Each weapon type is mapped to a list of weapons of that type
         '''
-        query = self._clean_up_query(query)
+        query, query_weapon_type = self._clean_up_query(query)
         if not query:
             logger.error("One of the query parameters was incorrect")
             return 0, None
@@ -633,11 +641,17 @@ class WeaponRollFinder:
                 await cursor.execute(sql, result)
 
                 weapons = {}
+                if query_weapon_type:
+                    query_weapon_type = query_weapon_type.title()
                 async for weapon in cursor:
                     category_hashes = json.loads(weapon[1])
                     weapon_type = self._parse_weapon_type(category_hashes)
                     if weapon_type:
-                        weapons.setdefault(weapon_type, set()).add(weapon[0]) 
+                        if query_weapon_type:
+                            if weapon_type == query_weapon_type:
+                                weapons.setdefault(weapon_type, set()).add(weapon[0])
+                        else:
+                            weapons.setdefault(weapon_type, set()).add(weapon[0])
                 return len(result), weapons
         else:
             return 0, None

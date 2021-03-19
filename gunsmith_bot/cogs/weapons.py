@@ -17,7 +17,9 @@ class Weapons(commands.Cog):
 
     def _help_text_search_by_perk(self):
         if hasattr(self.search_by_perk, "help"):
-            help_text = """Multiple perks of the same type (e.g., barrels) can be searched by separating with a comma.
+            help_text = """Specify weapon type or exclude to search across all weapon types
+            
+Multiple perks of the same type (e.g., barrels) can be searched by separating with a comma.
             
 "perks1" and "perks2" refer to the 2 columns that contain perks like Outlaw and Rampage. If both are specified, they will be considered as separate groups.
             
@@ -184,11 +186,11 @@ class Weapons(commands.Cog):
     @gunsmith.command(name="-search",
                       brief="Search for weapons with specific perks", 
                       description="Search for weapons with specific perks", 
-                      usage="-<perk type> <perk name>",
+                      usage="-type <weapon type name> -<perk type> <perk name>",
                       help="")
     async def search_by_perk(self, ctx, *, arg):
         '''
-        This function corresponds to the "?gunsmith -search -<perk type> <perk name>" command.
+        This function corresponds to the "?gunsmith -search -type <weapon type name> -<perk type> <perk name>" command.
 
         Parameters
         ----------
