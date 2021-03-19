@@ -641,6 +641,7 @@ class WeaponRollFinder:
                 await cursor.execute(sql, result)
 
                 weapons = {}
+                weapon_count = 0
                 if query_weapon_type:
                     query_weapon_type = query_weapon_type.title()
                 async for weapon in cursor:
@@ -650,9 +651,11 @@ class WeaponRollFinder:
                         if query_weapon_type:
                             if weapon_type == query_weapon_type:
                                 weapons.setdefault(weapon_type, set()).add(weapon[0])
+                                weapon_count += 1
                         else:
                             weapons.setdefault(weapon_type, set()).add(weapon[0])
-                return len(result), weapons
+                            weapon_count += 1
+                return weapon_count, weapons
         else:
             return 0, None
 
