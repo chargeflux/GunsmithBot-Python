@@ -188,7 +188,10 @@ class WeaponResult:
         The name of the Destiny 2 weapon to search
     
     display_properties_data: dict
-        Holds information about the name, description and image of the weapon
+        Holds information about the name and image of the weapon
+    
+    flavor_text: str
+        Holds flavor text for weapon
 
     socket_data: dict
         Holds information about the intrinsic nature and possible perks for the weapon
@@ -220,6 +223,7 @@ class WeaponResult:
         self.query = query
         self.hash = raw_weapon_data["hash"]
         self.display_properties_data = raw_weapon_data["displayProperties"]
+        self.flavor_text = raw_weapon_data["flavorText"]
         self.socket_data = raw_weapon_data["sockets"]
         self.item_categories_hash_data = sorted(raw_weapon_data["itemCategoryHashes"])
         self.display_source_data = raw_weapon_data["displaySource"]
@@ -254,8 +258,8 @@ class Weapon:
     name : str
         The name of the weapon
     
-    description: str
-        The description of the weapon
+    flavor_text: str
+        The flavor text of the weapon
 
     icon: str
         The relative url to the icon of the weapon at bungie.net
@@ -289,7 +293,7 @@ class Weapon:
                                                     weapon_result.damage_type_id)
 
         self.name = weapon_result.display_properties_data["name"]
-        self.description = weapon_result.display_properties_data["description"]
+        self.flavor_text = weapon_result.flavor_text
         self.icon = constants.BUNGIE_URL_ROOT + weapon_result.display_properties_data["icon"]
         self.screenshot = constants.BUNGIE_URL_ROOT + weapon_result.screenshot
         
