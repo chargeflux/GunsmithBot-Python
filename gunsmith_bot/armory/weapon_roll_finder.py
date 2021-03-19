@@ -387,10 +387,10 @@ class WeaponRollFinder:
 
                     LIKE_list = [f"perk_name LIKE ?" for _ in range(len(perk_names))]
                     LIKE_sql = " OR ".join(LIKE_list)
-                    perk_names_percent = tuple(f'%{i}%' for i in perk_names)
+                    perk_names_tuple = tuple(f'{i}' for i in perk_names)
                     
                     sql = f'''SELECT db_ids FROM perks1 WHERE {LIKE_sql}'''
-                    await cursor.execute(sql, perk_names_percent)
+                    await cursor.execute(sql, perk_names_tuple)
 
                     db_ids_perks1 = WeaponPlugSet("perks1", [])
                     async for result in cursor:
@@ -401,15 +401,16 @@ class WeaponRollFinder:
                         db_ids_perks1 = None
                     else:
                         status += 1
+                        # find weapons that can run all specified perks in a column
                         db_ids_perks1.perks = set.intersection(*db_ids_perks1.perks)
                         perk_plugs.setdefault(idx, []).append(db_ids_perks1)
 
                     LIKE_list = [f"perk_name LIKE ?" for _ in range(len(perk_names))]
                     LIKE_sql = " OR ".join(LIKE_list)
-                    perk_names_percent = tuple(f'%{i}%' for i in perk_names)
+                    perk_names_tuple = tuple(f'{i}' for i in perk_names)
                     
                     sql = f'''SELECT db_ids FROM perks2 WHERE {LIKE_sql}'''
-                    await cursor.execute(sql, perk_names_percent)
+                    await cursor.execute(sql, perk_names_tuple)
                     db_ids_perks2 = WeaponPlugSet("perks2", [])
                     async for result in cursor:
                         result = result[0].split(",")
@@ -419,6 +420,7 @@ class WeaponRollFinder:
                         db_ids_perks2 = None
                     else:
                         status += 1
+                        # find weapons that can run all specified perks in a column
                         db_ids_perks2.perks = set.intersection(*db_ids_perks2.perks)
                         perk_plugs.setdefault(idx, []).append(db_ids_perks2)
                     
@@ -455,10 +457,10 @@ class WeaponRollFinder:
                     
                     LIKE_list = [f"perk_name LIKE ?" for _ in range(len(perk_names))]
                     LIKE_sql = " OR ".join(LIKE_list)
-                    perk_names_percent = tuple(f'%{i}%' for i in perk_names)
+                    perk_names_tuple = tuple(f'{i}' for i in perk_names)
                     
                     sql = f'''SELECT db_ids FROM perks1 WHERE {LIKE_sql}'''
-                    await cursor.execute(sql, perk_names_percent)
+                    await cursor.execute(sql, perk_names_tuple)
 
                     db_ids_perks = []
                     async for result in cursor:
@@ -470,10 +472,10 @@ class WeaponRollFinder:
 
                     LIKE_list = [f"perk_name LIKE ?" for _ in range(len(perk_names))]
                     LIKE_sql = " OR ".join(LIKE_list)
-                    perk_names_percent = tuple(f'%{i}%' for i in perk_names)
+                    perk_names_tuple = tuple(f'{i}' for i in perk_names)
                     
                     sql = f'''SELECT db_ids FROM perks2 WHERE {LIKE_sql}'''
-                    await cursor.execute(sql, perk_names_percent)
+                    await cursor.execute(sql, perk_names_tuple)
                     
                     db_ids_perks = []
                     async for result in cursor:
