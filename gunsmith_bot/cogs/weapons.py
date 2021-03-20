@@ -4,7 +4,7 @@ import asyncio
 from sqlite3 import OperationalError
 import discord
 from discord.ext import commands
-from armory import Armory, WeaponRollFinder, PlugCategoryTables
+from armory import Armory, WeaponRollFinder, PlugCategoryTables, ArmoryMods
 from . import constants
 
 logger = logging.getLogger('Gunsmith.Weapons')
@@ -247,6 +247,49 @@ Multiple perks of the same type (e.g., barrels) can be searched by separating wi
         logger.info("Sending perk result")
         await ctx.send(embed=embed)
         return
+    
+    @gunsmith.command(name="-mod",
+                      brief="Get information about a mod", 
+                      description="Get information about a mod", 
+                      usage="<mod>",
+                      help="")
+    async def mod(self, ctx, *, arg):
+        '''
+        This function corresponds to the "?gunsmith -mod <mod>" command.
+
+        Parameters
+        ----------
+        ctx
+            The context of the command being invoked. Constructed by `discord.py`
+        arg
+            The arguments of the command, after "?gunsmith -mod"
+        '''
+        mod = arg
+
+        logger.info(ctx.message.content)
+
+        if len(mod) < 3:
+            await ctx.send("Please enter a query of 3 or more characters!")
+            return
+
+        if not os.path.exists(self.bot.current_state.current_manifest):
+            logger.critical(f"Manifest queried does not exist at {self.bot.current_state.current_manifest}")
+            await ctx.send("An error occured. Please try again!")
+            return
+
+        armory_mods = ArmoryMods(self.bot.current_state.current_manifest)
+
+        logger.info(f"Searching for '{mod}'")
+        mod_result = await armory_mods.get_mod_details(mod)
+
+        logger.info("Constructing mod result")
+        embed = discord.Embed(title=mod_result.name, description=mod_result.get_overview(), color=constants.DISCORD_BG_HEX)
+        embed.add_field(name="\u200b", value=mod_result.description, inline=False)
+        embed.set_thumbnail(url=mod_result.icon)
+
+        logger.info("Sending mod result")
+        await ctx.send(embed=embed)
+        return
 
     @gunsmith.command(name="-search",
                       brief="Search for weapons with specific perks", 
@@ -298,12 +341,16 @@ Multiple perks of the same type (e.g., barrels) can be searched by separating wi
         return
 
     @gunsmith.error
+    @gunsmith_full.error
+    @mod.error
     @perk.error
     @search_by_perk.error
     @default_perks.error
     async def on_error(self, ctx, error):
         if ctx.invoked_with == "-perk":
             command_type = "perk"
+        if ctx.invoked_with == "-mod":
+            command_type = "mod"
         elif ctx.invoked_with == "-search":
             command_type = "weapon perks"
         else:

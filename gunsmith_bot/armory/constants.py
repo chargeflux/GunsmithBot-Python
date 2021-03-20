@@ -92,6 +92,23 @@ class WeaponStats(Enum):
     VELOCITY = 2523465841
     ZOOM = 3555269338
 
+class ModBase(Enum):
+    MODS = 59
+    ARMOR = 4104513227
+    WEAPON = 610365472
+    HELMET = 1362265421
+    GAUNTLETS = 3872696960
+    CHEST = 3723676689
+    LEGS = 3607371986
+    CLASS_ITEM = 3196106184
+    
+
+class EnergyTypeHash(Enum):
+    ANY = 1198124803
+    ARC = 728351493
+    SOLAR = 591714140
+    VOID = 4069572561
+
 StatOrder = {
     WeaponStats.IMPACT: 0,
     WeaponStats.ACCURACY: 1,

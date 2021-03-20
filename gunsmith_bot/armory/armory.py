@@ -2,7 +2,6 @@ import os
 import glob
 import json
 import logging
-import itertools
 from operator import attrgetter
 import difflib
 from dataclasses import dataclass
