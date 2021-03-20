@@ -48,8 +48,7 @@ class ArmoryMods:
             SELECT json FROM DestinyInventoryItemDefinition as item 
             WHERE json_extract(item.json, '$.displayProperties.name') LIKE ? and 
             json_extract(item.json, '$.itemCategoryHashes[0]') = 59 and 
-            json_extract(item.json, '$.perks') is not NULL and 
-            json_extract(item.json, '$.collectibleHash') is not NULL''', (query + "%",))
+            json_extract(item.json, '$.perks') is not NULL''', (query + "%",))
 
             result = await cursor.fetchone()
             if not result:
@@ -77,13 +76,14 @@ class ArmoryMods:
                 if description_val := description[0]:
                     mod_perk_descriptions.append(description_val)
 
-            collectible_hash = raw_mod_data['collectibleHash']
-            cursor = await conn.cursor()
-            await cursor.execute('''
-            SELECT json_extract(item.json, '$.sourceString') FROM DestinyCollectibleDefinition as item 
-            WHERE json_extract(item.json, '$.hash') = ?''', (collectible_hash,))
+            mod_source = None
+            if collectible_hash := raw_mod_data.get('collectibleHash'):
+                cursor = await conn.cursor()
+                await cursor.execute('''
+                SELECT json_extract(item.json, '$.sourceString') FROM DestinyCollectibleDefinition as item 
+                WHERE json_extract(item.json, '$.hash') = ?''', (collectible_hash,))
 
-            mod_source = (await cursor.fetchone())[0]
+                mod_source = (await cursor.fetchone())[0]
             
             energy_cost = None
             energy_type = None
