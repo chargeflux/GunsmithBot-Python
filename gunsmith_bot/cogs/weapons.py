@@ -56,6 +56,8 @@ Multiple perks of the same type (e.g., barrels) can be searched by separating wi
             await ctx.send("An error occured. Please try again!")
             return
 
+        weapon = weapon.replace("’","'")
+
         armory = Armory(self.bot.current_state.current_manifest)
 
         logger.info(f"Searching for '{weapon}'")
@@ -115,6 +117,8 @@ Multiple perks of the same type (e.g., barrels) can be searched by separating wi
             logger.critical(f"Manifest queried does not exist at {self.bot.current_state.current_manifest}")
             await ctx.send("An error occured. Please try again!")
             return
+        
+        weapon = weapon.replace("’","'")
 
         armory = Armory(self.bot.current_state.current_manifest)
 
@@ -184,6 +188,8 @@ Multiple perks of the same type (e.g., barrels) can be searched by separating wi
             await ctx.send("An error occured. Please try again!")
             return
 
+        weapon = weapon.replace("’","'")
+
         armory = Armory(self.bot.current_state.current_manifest)
 
         weapons = await armory.get_weapon_details(weapon, default=True)
@@ -234,6 +240,8 @@ Multiple perks of the same type (e.g., barrels) can be searched by separating wi
             await ctx.send("An error occured. Please try again!")
             return
 
+        perk = perk.replace("’","'")
+
         armory = Armory(self.bot.current_state.current_manifest)
 
         logger.info(f"Searching for '{perk}'")
@@ -277,6 +285,8 @@ Multiple perks of the same type (e.g., barrels) can be searched by separating wi
             await ctx.send("An error occured. Please try again!")
             return
 
+        mod = mod.replace("’","'")
+
         armory_mods = ArmoryMods(self.bot.current_state.current_manifest)
 
         logger.info(f"Searching for '{mod}'")
@@ -316,6 +326,8 @@ Multiple perks of the same type (e.g., barrels) can be searched by separating wi
             await ctx.send("An error occured. Please try again!")
             return
 
+        query = query.replace("’","'")
+
         logger.info(f"Searching with parameters: '{query}'")
 
         weapon_plug_db = WeaponRollFinder(self.bot.current_state.current_manifest)
@@ -349,7 +361,7 @@ Multiple perks of the same type (e.g., barrels) can be searched by separating wi
     async def on_error(self, ctx, error):
         if ctx.invoked_with == "-perk":
             command_type = "perk"
-        if ctx.invoked_with == "-mod":
+        elif ctx.invoked_with == "-mod":
             command_type = "mod"
         elif ctx.invoked_with == "-search":
             command_type = "weapon perks"
