@@ -101,6 +101,8 @@ class ModBase(Enum):
     CHEST = 3723676689
     LEGS = 3607371986
     CLASS_ITEM = 3196106184
+    ASPECT = 962416439
+    FRAGMENT = 1635887355
     
 
 class EnergyTypeHash(Enum):

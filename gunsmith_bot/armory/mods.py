@@ -4,6 +4,7 @@ import logging
 import itertools
 from dataclasses import dataclass
 import aiosqlite
+import re
 from . import constants
 
 logger = logging.getLogger('Armory.Mods')
@@ -47,8 +48,8 @@ class ArmoryMods:
             await cursor.execute('''
             SELECT json FROM DestinyInventoryItemDefinition as item 
             WHERE json_extract(item.json, '$.displayProperties.name') LIKE ? and 
-            json_extract(item.json, '$.itemCategoryHashes[0]') = 59 and 
-            json_extract(item.json, '$.perks') is not NULL''', (query + "%",))
+            json_extract(item.json, '$.itemCategoryHashes[0]') = ? and 
+            json_extract(item.json, '$.perks') is not NULL''', ("%" + query + "%", constants.ModBase.MODS.value,))
 
             result = await cursor.fetchone()
             if not result:
@@ -57,10 +58,14 @@ class ArmoryMods:
             if "itemCategoryHashes" in raw_mod_data:
                 if constants.ModBase.MODS.value not in raw_mod_data["itemCategoryHashes"]:
                     raise ValueError("Mod not identified: {raw_mod_data['itemCategoryHashes']}")
-                if constants.ModBase.ARMOR.value in raw_mod_data["itemCategoryHashes"]:
+                elif constants.ModBase.ARMOR.value in raw_mod_data["itemCategoryHashes"]:
                     mod_category = constants.ModBase.ARMOR
                 elif constants.ModBase.WEAPON.value in raw_mod_data["itemCategoryHashes"]: 
                     mod_category = constants.ModBase.WEAPON
+                elif constants.ModBase.ASPECT.value in raw_mod_data["traitHashes"]:
+                    mod_category = constants.ModBase.ASPECT
+                elif constants.ModBase.FRAGMENT.value in raw_mod_data["traitHashes"]:
+                    mod_category = constants.ModBase.FRAGMENT
                 else:
                     raise ValueError(f"Could not identify mod category hashes: {raw_mod_data['itemCategoryHashes']}")
             
@@ -150,6 +155,8 @@ class Mod:
                 description = '- ' + '\n- '.join(mod_perk_descriptions)
             else:
                 description = mod_perk_descriptions[0]
+            if mod_category == mod_category.ASPECT or mod_category == mod_category.FRAGMENT:
+                description = re.sub(r"(\[.*?\])", "", description)
         icon = constants.BUNGIE_URL_ROOT + mod_details["icon"]
         if mod_category == constants.ModBase.ARMOR:
             if armor_location:
