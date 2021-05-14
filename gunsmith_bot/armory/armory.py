@@ -699,10 +699,10 @@ class WeaponBaseArchetype:
     
     @power_cap.setter
     def power_cap(self, value):
-        if self.weapon_tier_type == constants.WeaponTierType.LEGENDARY:
-            self._power_cap = value
-        else:
+        if str(value).startswith("9"):
             self._power_cap = None
+        else:
+            self._power_cap = value
 
     def __str__(self):
         str_to_construct = ''
