@@ -86,7 +86,7 @@ class WeaponStats(Enum):
     RANGE = 1240592695
     RECOIL = 2715839340
     RELOAD_SPEED = 4188031367
-    ROUNDS_PER_MINUTE = 4284893193
+    RPM = 4284893193
     STABILITY = 155624089
     SWING_SPEED = 2837207746
     VELOCITY = 2523465841
@@ -128,7 +128,7 @@ StatOrder = {
     WeaponStats.AIM_ASSISTANCE: 13,
     WeaponStats.ZOOM: 14,
     WeaponStats.RECOIL: 15,
-    WeaponStats.ROUNDS_PER_MINUTE: 16,
+    WeaponStats.RPM: 16,
     WeaponStats.CHARGE_TIME: 17,
     WeaponStats.DRAW_TIME: 18,
     WeaponStats.AMMO_CAPACITY: 19,

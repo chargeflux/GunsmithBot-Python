@@ -137,7 +137,7 @@ Multiple perks of the same type (e.g., barrels) can be searched by separating wi
         if len(result.weapon_perks) <= 2:
             for perk in result.weapon_perks:
                 embed.add_field(name='**' + perk.name + '**', value=perk, inline=True)
-            embed.add_field(name="Stats", value=STATS, inline=True)
+            embed.add_field(name="**Stats**", value=STATS, inline=True)
         else:
             field_idx = 0
             for perk in result.weapon_perks:
@@ -157,6 +157,60 @@ Multiple perks of the same type (e.g., barrels) can be searched by separating wi
         embed.add_field(name="\u200b", value=ending_text, inline=False)
 
         logger.info("Sending weapon result")
+        await ctx.send(embed=embed)
+
+    @gunsmith.command(name='-stats', 
+            brief="Get the stats information about weapons", 
+            description="Get stats for a weapon", 
+            usage="-stats <weapon>",
+            help="")
+    async def gunsmith_stats(self, ctx, *, arg):
+        '''
+        This function corresponds to the "?gunsmith -stats <weapon>" command.
+
+        Parameters
+        ----------
+        ctx
+            The context of the command being invoked. Constructed by `discord.py`
+        arg
+            The arguments of the command, after "?gunsmith"
+        '''
+        weapon = arg
+
+        logger.info(ctx.message.content)
+
+        if len(weapon) < 3:
+            await ctx.send("Please enter a query of 3 or more characters!")
+            return
+
+        if not os.path.exists(self.bot.current_state.current_manifest):
+            logger.critical(f"Manifest queried does not exist at {self.bot.current_state.current_manifest}")
+            await ctx.send("An error occured. Please try again!")
+            return
+        
+        weapon = weapon.replace("’","'")
+
+        armory = Armory(self.bot.current_state.current_manifest)
+
+        logger.info(f"Searching for '{weapon}'")
+        weapons = await armory.get_weapon_details(weapon)
+
+        logger.info(f"# of weapons found: {len(weapons)}")
+        result = weapons[0] 
+
+        logger.info("Constructing weapon result")
+        STATS = '\n'.join([str(stat) for stat in result.weapon_stats])
+        embed = discord.Embed(title=result.name, color=constants.DISCORD_BG_HEX)
+        embed.set_thumbnail(url=result.icon)
+
+        embed.add_field(name="**Stats**", value=STATS, inline=True)
+        
+        light_gg_url = "https://www.light.gg/db/items/" + str(result.weapon_hash)
+        ending_text_components = [f"[Screenshot]({result.screenshot})", f"[light.gg]({light_gg_url})"]
+        ending_text = " • ".join(ending_text_components)
+        embed.add_field(name="\u200b", value=ending_text, inline=False)
+
+        logger.info("Sending weapon stats result")
         await ctx.send(embed=embed)
     
     @gunsmith.command(name="-default",
@@ -300,6 +354,55 @@ Multiple perks of the same type (e.g., barrels) can be searched by separating wi
         logger.info("Sending mod result")
         await ctx.send(embed=embed)
         return
+    
+    @gunsmith.command(name="-compare",
+                      brief="Compare stats between 2 weapons", 
+                      description="Compare stats between 2 weapons", 
+                      usage="<weapon>, <weapon>",
+                      help="")
+    async def compare(self, ctx, *, arg):
+        '''
+        This function corresponds to the "?gunsmith -compare <weapon> <weapon>" command.
+
+        Parameters
+        ----------
+        ctx
+            The context of the command being invoked. Constructed by `discord.py`
+        arg
+            The arguments of the command, after "?gunsmith -compare"
+        '''
+        compare_query = arg
+
+        logger.info(ctx.message.content)
+
+        if len(compare_query) < 3:
+            await ctx.send("Please enter a query of 3 or more characters!")
+            return
+
+        if not os.path.exists(self.bot.current_state.current_manifest):
+            logger.critical(f"Manifest queried does not exist at {self.bot.current_state.current_manifest}")
+            await ctx.send("An error occured. Please try again!")
+            return
+
+        compare_query = compare_query.replace("’","'")
+
+        armory = Armory(self.bot.current_state.current_manifest)
+
+        logger.info(f"Comparing '{compare_query}'")
+        comparison_result = await armory.compare_weapons(compare_query)
+
+        logger.info("Constructing compare result")
+        embed = discord.Embed(color=constants.DISCORD_BG_HEX)
+        embed.add_field(name=comparison_result.weapons_names[0], 
+                        value=comparison_result.get_stats_for_weapon(0), inline=True)
+        embed.add_field(name="Stats", 
+                        value=comparison_result.common_stat_names, inline=True)
+        embed.add_field(name=comparison_result.weapons_names[1], 
+                        value=comparison_result.get_stats_for_weapon(1), inline=True)
+
+        logger.info("Sending compare result")
+        await ctx.send(embed=embed)
+        return
 
     @gunsmith.command(name="-search",
                       brief="Search for weapons with specific perks", 
@@ -354,8 +457,10 @@ Multiple perks of the same type (e.g., barrels) can be searched by separating wi
 
     @gunsmith.error
     @gunsmith_full.error
+    @gunsmith_stats.error
     @mod.error
     @perk.error
+    @compare.error
     @search_by_perk.error
     @default_perks.error
     async def on_error(self, ctx, error):
@@ -365,12 +470,17 @@ Multiple perks of the same type (e.g., barrels) can be searched by separating wi
             command_type = "mod"
         elif ctx.invoked_with == "-search":
             command_type = "weapon perks"
+        elif ctx.invoked_with == "-compare":
+            command_type = "compare query"
         else:
             command_type = "weapon"
         if hasattr(error, 'original'):
             logger.exception(error.original)
             if isinstance(error.original, ValueError):
                 logger.error(f"Command: {ctx.message.content}")
+                if command_type == 'compare query':
+                    await ctx.send('Comparison query failed')
+                    return
                 await ctx.send(f'{command_type.title()} could not be found.')
                 return
             if isinstance(error.original, TypeError):
@@ -387,11 +497,14 @@ Multiple perks of the same type (e.g., barrels) can be searched by separating wi
                 logger.error('Failed to find manifest')
                 await ctx.send('An error occured. Please try again.')
                 return
-        if isinstance(error, commands.BadArgument):
+        elif isinstance(error, commands.BadArgument):
             await ctx.send(f"Please enter the {command_type}.")
             return
-        if isinstance(error, commands.MissingRequiredArgument):
+        elif isinstance(error, commands.MissingRequiredArgument):
             await ctx.send(f"Please enter the {command_type}. Run '?help gunsmith' for more information.")
+            return
+        else:
+            await ctx.send(f"An error occured.")
             return
 
 

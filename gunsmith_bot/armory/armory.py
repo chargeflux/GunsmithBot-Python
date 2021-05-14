@@ -174,6 +174,34 @@ class Armory:
         weapons.sort(key = attrgetter('similarity_score'), reverse= True)
         return weapons
 
+    async def compare_weapons(self, query):
+        '''
+        Compare the stats between 2 Destiny 2 weapons
+
+        Parameters
+        ----------
+        query: str
+            The names of the 2 Destiny 2 weapons to compare
+
+        Returns
+        -------
+        compare_result : ComparisonResult
+        '''
+
+        weapons = query.split(",")
+        if len(weapons) != 2:
+            raise ValueError
+
+        to_compare = []
+        for weapon in weapons:
+            clean_weapon_query = weapon.strip()
+            logger.info(f"Looking up {clean_weapon_query} for comparison")
+            results = await self.get_weapon_details(clean_weapon_query)
+            to_compare.append(results[0])
+
+        compare_result = ComparisonResult(to_compare)
+        return compare_result
+
 class WeaponResult:
     '''
     Represents the JSON data for a weapon
@@ -633,6 +661,102 @@ class Weapon:
             power_cap = (await cursor.fetchone())[0]
         return power_cap
 
+class ComparisonResult:
+    '''
+    Contains information about stat differences between 2 Destiny 2 Weapons
+
+    Attributes 
+    ----------
+    weapons_names : [str]
+        A list of names for each of the 2 weapons being compared
+
+    weapon_stat_diff : WeaponStatDiff
+        Contains the deltas for all stats between the 2 weapons
+    
+    common_stat_names : [str]
+        Contains the common stat names between the 2 weapons
+    
+    weapons_stats : [WeaponStatInfo]
+        A list of weapon stats for each of the 2 weapons being compared
+    '''
+
+    def __init__(self, weapons):
+        if len(weapons) != 2:
+            raise 
+        self.weapons_names = [weapon.name for weapon in weapons]
+        self.weapon_stat_diff = None
+        self.common_stat_names = None
+        self._calculate_stat_diff(weapons)
+        self.weapons_stats = [weapon.weapon_stats for weapon in weapons]
+
+    def _calculate_stat_diff(self, weapons):
+        '''
+        Gets stat differences between weapons
+
+        Parameters
+        ----------
+        weapon_results : [Weapon]
+            A list of 2 Weapons
+        '''
+        weapon_stat_diff = []
+        weapon_stat_base = []
+        common_stats = set(weapons[0].weapon_stats) & set(weapons[1].weapon_stats)
+        common_stats = [stat.stat.stat_type for stat in common_stats]
+        common_stats.sort(key=lambda x: constants.StatOrder[x])
+        w1_stats = filter(lambda x: x.stat.stat_type in common_stats, weapons[0].weapon_stats)
+        w2_stats = filter(lambda x: x.stat.stat_type in common_stats, weapons[1].weapon_stats)
+        w1_stats = sorted(w1_stats, key=lambda x: constants.StatOrder[x.stat.stat_type])
+        w2_stats = sorted(w2_stats, key=lambda x: constants.StatOrder[x.stat.stat_type])
+        for w1, w2 in zip(w1_stats, w2_stats):
+            weapon_stat_base.append(w1.stat.value)
+            weapon_stat_diff.append(w1.stat.value - w2.stat.value)
+        
+        self.weapon_stat_diff = WeaponStatDiff(weapon_stat_base, weapon_stat_diff)
+        common_stat_names = [stat.name.replace("_"," ").title() if stat != constants.WeaponStats.RPM else "RPM" for stat in common_stats]
+        self.common_stat_names = '\n'.join(common_stat_names)
+    
+    def get_stats_for_weapon(self, idx):
+        '''
+        Gets stats and difference for weapon
+
+        Parameters
+        ----------
+        idx : [int]
+            The index corresponding to the first or second weapon
+        '''
+        stats = []
+        if idx == 0:
+            for stat_base, stat_delta in self.weapon_stat_diff:
+                if stat_delta < 0:
+                    stats.append(str(stat_base))
+                elif stat_delta > 0:
+                    stats.append('**' + str(stat_base) + f" (+{stat_delta})**")
+                else:
+                    stats.append(str(stat_base))
+            stats_str = '\n'.join(stats)
+            return stats_str
+        if idx == 1:
+            for stat_base, stat_delta in self.weapon_stat_diff:
+                if stat_delta < 0:
+                    stats.append('**' + str(stat_base+stat_delta*-1) + f" (+{stat_delta*-1})**")
+                elif stat_delta > 0:
+                    stats.append(str(stat_base-stat_delta))
+                else:
+                    stats.append(str(stat_base))
+            stats_str = '\n'.join(stats)
+            return stats_str
+        else:
+            raise ValueError
+
+@dataclass 
+class WeaponStatDiff:
+    base_values: list
+    stat_diff: list
+
+    def __iter__(self):
+        for i in range(len(self.base_values)):
+            yield self.base_values[i], self.stat_diff[i]
+
 @dataclass
 class WeaponPerkPlugInfo:
     name: str
@@ -728,9 +852,9 @@ class WeaponStatInfo:
     value: int
 
     def __str__(self):
-        if self.stat_type == constants.WeaponStats.ROUNDS_PER_MINUTE:
-            return "**RPM**: " + str(self.value)
-        return "**" + self.stat_type.name.replace("_"," ").title() + "**: " + str(self.value)
+        if self.stat_type == constants.WeaponStats.RPM:
+            return f'**{self.stat_type.name.replace("_"," ")}**: ' + str(self.value)
+        return f'**{self.stat_type.name.replace("_"," ").title()}**: ' + str(self.value)
 
 @dataclass
 class WeaponStat:
@@ -739,3 +863,11 @@ class WeaponStat:
 
     def __str__(self):
         return str(self.stat)
+
+    def __hash__(self):
+        return hash(self.stat.stat_type)
+
+    def __eq__(self, other):
+        if not isinstance(other, type(self)): 
+            return NotImplemented
+        return self.stat.stat_type == other.stat.stat_type
