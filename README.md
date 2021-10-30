@@ -1,6 +1,8 @@
 # GunsmithBot
 
-Discord bot to retrieve weapon rolls for Destiny 2
+Python Discord bot to retrieve weapon rolls for Destiny 2.
+
+This project is no longer being worked on due to development of discord.py having been discontinued.
 
 ## Requirements
 
