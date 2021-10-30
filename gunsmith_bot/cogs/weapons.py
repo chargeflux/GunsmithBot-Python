@@ -252,7 +252,7 @@ Multiple perks of the same type (e.g., barrels) can be searched by separating wi
         result = weapons[0] # TODO: pagination
 
         logger.info("Constructing weapon result")
-        DESCRIPTION = str(result.weapon_base_info) + "\n**" + result.intrinsic.name  + "**\n" + result.description
+        DESCRIPTION = str(result.weapon_base_info) + "\n**" + result.intrinsic.name  + "**\n" + result.flavor_text
         embed = discord.Embed(title=result.name, description= DESCRIPTION, color=constants.DISCORD_BG_HEX)
         embed.set_thumbnail(url=result.icon)
         perk = result.weapon_perks[0]
