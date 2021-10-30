@@ -1,8 +1,8 @@
-# GunsmithBot
+# GunsmithBot-Python
 
 Python Discord bot to retrieve weapon rolls for Destiny 2.
 
-This project is no longer being worked on due to development of discord.py having been discontinued.
+**This project is no longer being worked on due to development of discord.py having been discontinued**. Consider the TypeScript implementation of [GunsmithBot](https://github.com/chargeflux/GunsmithBot) which is in active development!
 
 ## Requirements
 
